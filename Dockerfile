@@ -15,7 +15,7 @@ RUN pip install mypy pre-commit
 
 # utilities
 RUN apt-get install -y \
-    bash nano vim valgrind
+    bash nano vim valgrind dos2unix
 
 # setup a home directory to work in
 RUN mkdir /home/gem5

@@ -29,17 +29,20 @@ dev:
 	docker $(DOCKER_RUN_CMD) $(DOCKER_RUN_ARGS) $(CONTAINER) $(DOCKER_CMD)
 
 ### for use inside a dev container ###
-.PHONY: gem5
+.PHONY: gem5 run
 
-BUILD_THREADS=4
+BUILD_THREADS=13
 # ARM/NULL/MIPS/POWER/RISCV/SPARC/X86
 # case sensitive
 ISA=X86
 # debug/opt/fast
 BUILD_VARIANT=opt
 
-GEM5_EXTRAS=gem5-extensions/
+GEM5_EXTRAS=$(MOUNT_GUEST_DIR)/gem5-extensions/src
 
 gem5:
-	cd gem5
-	scons EXTRAS=$(GEM5_EXTRAS) build/$(ISA)/gem5.$(BUILD_VARIANT) -j $(BUILD_THREADS)
+	cd gem5; scons EXTRAS=$(GEM5_EXTRAS) build/$(ISA)/gem5.$(BUILD_VARIANT) -j$(BUILD_THREADS)
+
+# run with 'make run opts="--arg1 --arg2 --etc" script=gem5-extensions/configs/config.py
+run:
+	./gem5/build/$(ISA)/gem5.$(BUILD_VARIANT) $(opts) $(script)
