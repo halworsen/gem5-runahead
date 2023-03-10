@@ -1,0 +1,1 @@
+Compile with `EXTRAS=/path/to/gem5-extensions/src`

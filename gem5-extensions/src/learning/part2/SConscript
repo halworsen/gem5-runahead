@@ -1,0 +1,9 @@
+Import('*')
+
+DebugFlag('Howdy')
+
+SimObject('HowdyObject.py', sim_objects=['HowdyObject'])
+Source('howdy_object.cc')
+
+SimObject('TakeCareObject.py', sim_objects=['TakeCareObject'])
+Source('take_care_object.cc')
