@@ -1,2 +1,6 @@
+# relevant papers
+papers/*.pdf
+
+# environment & workspace configuration
 venv/
 .vscode/
