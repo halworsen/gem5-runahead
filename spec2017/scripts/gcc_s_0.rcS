@@ -1,0 +1,4 @@
+cd spec2017/602.gcc_s
+/sbin/m5 exit
+./gcc_s gcc-pp.c -O5 -fipa-pta -o gcc-pp.opts-O5_-fipa-pta.s
+/sbin/m5 exit

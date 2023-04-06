@@ -1,0 +1,8 @@
+cd spec2017/619.lbm_s
+/sbin/m5 checkpoint
+/sbin/m5 dumpstats
+/sbin/m5 resetstats
+./lbm_s 2000 reference.dat 0 0 200_200_260_ldc.of 
+echo "Done :D"
+/sbin/m5 exit
+/sbin/m5 exit

@@ -1,0 +1,8 @@
+cd spec2017/625.x264_s
+/sbin/m5 checkpoint
+/sbin/m5 dumpstats
+/sbin/m5 resetstats
+./x264_s --seek 500 --dumpyuv 200 --frames 1250 -o BuckBunny_New.264 BuckBunny.yuv 1280x720 
+echo "Done :D"
+/sbin/m5 exit
+/sbin/m5 exit

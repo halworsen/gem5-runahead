@@ -1,0 +1,8 @@
+cd spec2017/627.cam4_s
+/sbin/m5 checkpoint
+/sbin/m5 dumpstats
+/sbin/m5 resetstats
+./cam4_s 
+echo "Done :D"
+/sbin/m5 exit
+/sbin/m5 exit

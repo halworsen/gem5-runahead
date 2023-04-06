@@ -8,7 +8,7 @@ Clone the repository with
 git clone --recurse-submodules https://github.com/halworsen/gem5-runahead.git
 ```
 
-This will additionally clone [v22.1.0.0](https://gem5.googlesource.com/public/gem5/+/refs/tags/v22.1.0.0) of gem5.
+This will additionally clone [v22.0.0.2](https://gem5.googlesource.com/public/gem5/+/refs/tags/v22.0.0.2) of gem5.
 
 If you run Windows or just want to use a container:
 

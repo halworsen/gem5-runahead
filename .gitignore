@@ -8,3 +8,12 @@ papers/*.pdf
 # environment & workspace configuration
 venv/
 .vscode/
+
+# misc. output redirections
+*.txt
+
+# output files
+*.out
+
+# testing scripts
+**/test.sh

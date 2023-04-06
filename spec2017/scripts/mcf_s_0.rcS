@@ -1,0 +1,8 @@
+cd spec2017/605.mcf_s
+/sbin/m5 checkpoint
+/sbin/m5 dumpstats
+/sbin/m5 resetstats
+./mcf_s inp.in  
+echo "Done :D"
+/sbin/m5 exit
+/sbin/m5 exit

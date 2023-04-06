@@ -1,0 +1,8 @@
+cd spec2017/600.perlbench_s
+/sbin/m5 checkpoint
+/sbin/m5 dumpstats
+/sbin/m5 resetstats
+./perlbench_s -I./lib diffmail.pl 4 800 10 17 19 300 
+echo "Done :D"
+/sbin/m5 exit
+/sbin/m5 exit
