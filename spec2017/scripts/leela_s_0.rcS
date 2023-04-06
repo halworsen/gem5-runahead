@@ -1,8 +1,4 @@
 cd spec2017/641.leela_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./leela_s ref.sgf 
-echo "Done :D"
 /sbin/m5 exit
+./leela_s ref.sgf
 /sbin/m5 exit

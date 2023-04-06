@@ -1,8 +1,4 @@
 cd spec2017/602.gcc_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./gcc_s gcc-pp.c -O5 -finline-limit=24000 -fgcse -fgcse-las -fgcse-lm -fgcse-sm -o gcc-pp.opts-O5_-finline-limit_24000_-fgcse_-fgcse-las_-fgcse-lm_-fgcse-sm.s 
-echo "Done :D"
 /sbin/m5 exit
+./gcc_s gcc-pp.c -O5 -finline-limit=24000 -fgcse -fgcse-las -fgcse-lm -fgcse-sm -o gcc-pp.opts-O5_-finline-limit_24000_-fgcse_-fgcse-las_-fgcse-lm_-fgcse-sm.s
 /sbin/m5 exit

@@ -62,10 +62,10 @@ def setup_cores(args) -> SimpleProcessor:
 
     # Functional units
     core.fuPool = DefaultFUPool()
-    core.fuPool.FUList[0].count = 3  # int ALU
-    core.fuPool.FUList[1].count = 1  # int mul/div
-    core.fuPool.FUList[2].count = 1  # fp ALU
-    core.fuPool.FUList[3].count = 1  # fp mul/div
-    core.fuPool.FUList[8].count = 2  # r/w mem port
+    core.fuPool.FUList[0].count = args.int_alus  # int ALU
+    core.fuPool.FUList[1].count = args.int_mds  # int mul/div
+    core.fuPool.FUList[2].count = args.fp_alus  # fp ALU
+    core.fuPool.FUList[3].count = args.fp_mds  # fp mul/div
+    core.fuPool.FUList[8].count = args.mem_ports  # r/w mem port
 
     return o3_processor

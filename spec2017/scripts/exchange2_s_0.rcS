@@ -1,8 +1,4 @@
 cd spec2017/648.exchange2_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./exchange2_s 6 
-echo "Done :D"
 /sbin/m5 exit
+./exchange2_s 6
 /sbin/m5 exit

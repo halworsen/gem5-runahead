@@ -1,8 +1,4 @@
 cd spec2017/644.nab_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./nab_s 3j1n 20140317 220 
-echo "Done :D"
 /sbin/m5 exit
+./nab_s 3j1n 20140317 220
 /sbin/m5 exit

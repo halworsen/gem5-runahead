@@ -1,8 +1,4 @@
 cd spec2017/623.xalancbmk_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./xalancbmk_s -v t5.xml xalanc.xsl 
-echo "Done :D"
 /sbin/m5 exit
+./xalancbmk_s -v t5.xml xalanc.xsl
 /sbin/m5 exit

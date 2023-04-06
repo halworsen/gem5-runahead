@@ -1,8 +1,4 @@
 cd spec2017/607.cactuBSSN_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./cactuBSSN_s spec_ref.par   
-echo "Done :D"
 /sbin/m5 exit
+./cactuBSSN_s spec_ref.par
 /sbin/m5 exit

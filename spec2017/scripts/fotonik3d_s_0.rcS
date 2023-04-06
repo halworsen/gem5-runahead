@@ -1,8 +1,4 @@
 cd spec2017/649.fotonik3d_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./fotonik3d_s 
-echo "Done :D"
 /sbin/m5 exit
+./fotonik3d_s
 /sbin/m5 exit

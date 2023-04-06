@@ -1,8 +1,4 @@
 cd spec2017/620.omnetpp_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
 /sbin/m5 exit
-./omnetpp_s -c General -r 0 
-echo "Done :D"
+./omnetpp_s -c General -r 0
 /sbin/m5 exit

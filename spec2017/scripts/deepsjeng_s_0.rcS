@@ -1,8 +1,4 @@
 cd spec2017/631.deepsjeng_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./deepsjeng_s ref.txt 
-echo "Done :D"
 /sbin/m5 exit
+./deepsjeng_s ref.txt
 /sbin/m5 exit

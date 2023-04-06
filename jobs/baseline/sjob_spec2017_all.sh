@@ -79,11 +79,28 @@ FSPARAMS=(
     "--script=$RUNSCRIPT"
     "--max-insts=2000000000" # max 2 billion instructions
     "--clock=3.2GHz"
+
+    # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"
     "--l1d-size=32kB" "--l1d-assoc=8"
     "--l2-size=256kB" "--l2-assoc=8"
     "--l3-size=6MB" "--l3-assoc=12"
     "--mem-size=2GB"
+
+    # Pipeline stage widths
+    "--fetch-width=4" "--decode-width=4" "--rename-width=4"
+    "--issue-width=4" "--writeback-width=8" "--commit-width=8"
+
+    # Issue/load/store queue sizes
+    "--iq-size=97" "--lq-size=64" "--sq-size=60"
+
+    # Physical registers
+    "--int-regs=180" "--fp-regs=180" "--vec-regs=96"
+
+    # Functional units
+    "--int-alus=3" "--int-mds=1"
+    "--fp-alus=1" "--fp-mds=1"
+    "--mem-ports=2"
 )
 
 PARAMS="${FSPARAMS[@]}"

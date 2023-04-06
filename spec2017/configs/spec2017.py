@@ -15,12 +15,8 @@ from core import setup_cores, add_core_args
 from memory import setup_cache, setup_memory, add_memory_args
 from options import add_parser_args
 
-# Require X86 ISA and KVM capabilities
-# KVM is used to "fast-forward" through the Linux boot
-requires(
-    isa_required=ISA.X86,
-    kvm_required=True,
-)
+# Require X86 ISA
+requires(isa_required=ISA.X86)
 
 parser = argparse.ArgumentParser(
     prog=os.path.basename(__file__),
@@ -30,7 +26,6 @@ parser = argparse.ArgumentParser(
 add_parser_args(parser)
 add_core_args(parser)
 add_memory_args(parser)
-
 args = parser.parse_args()
 
 processor = setup_cores(args)

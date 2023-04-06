@@ -2,6 +2,3 @@
 	path = gem5
 	url = https://gem5.googlesource.com/public/gem5
 	branch = tags/v22.0.0.2
-[submodule "gem5-resources"]
-	path = gem5-resources
-	url = https://gem5.googlesource.com/public/gem5-resources

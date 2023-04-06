@@ -1,8 +1,4 @@
 cd spec2017/628.pop2_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./pop2_s 
-echo "Done :D"
 /sbin/m5 exit
+./pop2_s
 /sbin/m5 exit

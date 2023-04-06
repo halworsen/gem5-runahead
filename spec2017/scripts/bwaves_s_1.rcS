@@ -1,8 +1,4 @@
 cd spec2017/603.bwaves_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./bwaves_s bwaves_2 < bwaves_2.in 
-echo "Done :D"
 /sbin/m5 exit
+./bwaves_s bwaves_2 < bwaves_2.in
 /sbin/m5 exit

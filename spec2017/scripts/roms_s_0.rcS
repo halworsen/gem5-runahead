@@ -1,8 +1,4 @@
 cd spec2017/654.roms_s
-/sbin/m5 checkpoint
-/sbin/m5 dumpstats
-/sbin/m5 resetstats
-./roms_s < ocean_benchmark3.in 
-echo "Done :D"
 /sbin/m5 exit
+./roms_s < ocean_benchmark3.in
 /sbin/m5 exit
