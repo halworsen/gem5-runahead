@@ -1,0 +1,3 @@
+Import('*')
+
+SimObject('RunaheadCPU.py', sim_objects=[], tags='x86 isa')

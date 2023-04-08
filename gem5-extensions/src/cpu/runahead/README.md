@@ -1,0 +1,1 @@
+Because gem5's O3CPU model does not use protected fields (effectively preventing inheritance), this is just a copy & paste of the O3CPU model with modifications required for runahead.
