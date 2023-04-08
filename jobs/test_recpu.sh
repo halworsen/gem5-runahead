@@ -38,6 +38,7 @@ echo "--- python packages ---"
 pip freeze
 
 SIZE=$1
+echo
 echo "job: test run of gem5 (SE mode) - $SIZE x $SIZE matrix multiplication"
 echo "time: $(date)"
 echo "--- start job ---"

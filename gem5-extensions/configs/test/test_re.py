@@ -17,10 +17,11 @@ def setup_system(args) -> System:
     system.mem_ranges = [AddrRange('1GB')]
 
     system.cpu = X86RunaheadCPU()
+    #system.cpu.numROBEntries = 16
     system.membus = SystemXBar()
 
-    system.cpu.icache = L1ICache('32kB')
-    system.cpu.dcache = L1DCache('32kB')
+    system.cpu.icache = L1ICache('16kB')
+    system.cpu.dcache = L1DCache('16kB')
     # connect the cpu-side ports
     system.cpu.icache.connect(system.cpu)
     system.cpu.dcache.connect(system.cpu)
@@ -30,7 +31,7 @@ def setup_system(args) -> System:
     system.cpu.icache.connect(system.l2bus)
     system.cpu.dcache.connect(system.l2bus)
 
-    system.l2cache = L2Cache('64kB')
+    system.l2cache = L2Cache('128kB')
     system.l2cache.connect(system.l2bus, side='cpu')
     system.l2cache.connect(system.membus, side='mem')
 

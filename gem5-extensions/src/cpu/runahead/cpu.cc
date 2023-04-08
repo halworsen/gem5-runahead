@@ -245,6 +245,7 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
 
     // Setup the ROB for whichever stages need it.
     commit.setROB(&rob);
+    rename.setROB(&rob);
 
     lastActivatedCycle = 0;
 

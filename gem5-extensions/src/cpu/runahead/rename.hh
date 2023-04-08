@@ -52,6 +52,7 @@
 #include "cpu/runahead/free_list.hh"
 #include "cpu/runahead/iew.hh"
 #include "cpu/runahead/limits.hh"
+#include "cpu/runahead/rob.hh"
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
@@ -62,6 +63,8 @@ struct BaseRunaheadCPUParams;
 
 namespace runahead
 {
+
+using ROBuffer = gem5::runahead::ROB;
 
 /**
  * Rename handles both single threaded and SMT rename. Its
@@ -166,6 +169,9 @@ class Rename
     /** Clear all thread-specific states */
     void clearStates(ThreadID tid);
 
+    /** Sets pointer to the ROB. */
+    void setROB(ROB *rob_ptr);
+
     /** Sets pointer to list of active threads. */
     void setActiveThreads(std::list<ThreadID> *at_ptr);
 
@@ -213,6 +219,9 @@ class Rename
      * instructions.
      */
     void renameInsts(ThreadID tid);
+
+    /** Checks if the ROB is blocked by a long latency load */
+    bool checkROBStallerIsLLL(ThreadID tid);
 
     /** Inserts unused instructions from a given thread into the skid buffer,
      * to be renamed once rename unblocks.
@@ -322,6 +331,9 @@ class Rename
 
     /** Pointer to CPU. */
     CPU *cpu;
+
+    /** Pointer to the ROB */
+    ROBuffer *rob;
 
     /** Pointer to main time buffer used for backwards communication. */
     TimeBuffer<TimeStruct> *timeBuffer;
@@ -459,6 +471,9 @@ class Rename
     /** The maximum skid buffer size. */
     unsigned skidBufferMax;
 
+    /** The depth at which a blocking memory request is considered a long latency load */
+    unsigned char lllDepthThreshold;
+
     /** Enum to record the source of a structure full stall.  Can come from
      * either ROB, IQ, LSQ, and it is priortized in that order.
      */
@@ -532,6 +547,9 @@ class Rename
         statistics::Scalar tempSerializing;
         /** Number of instructions inserted into skid buffers. */
         statistics::Scalar skidInsts;
+
+        /** Amount of times rename stalled due to a full ROB with a long latency load at its head */
+        statistics::Scalar lllBlocks;
     } stats;
 };
 

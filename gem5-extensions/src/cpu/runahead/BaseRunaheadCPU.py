@@ -161,3 +161,12 @@ class BaseRunaheadCPU(BaseCPU):
                                                        Parent.numThreads),
                                        "Branch Predictor")
     needsTSO = Param.Bool(False, "Enable TSO Memory model")
+
+
+    # 0 is L1, 1 is L2 and so on
+    # This is more of a system/simulation parameter, really, but I'm trying to keep
+    # runahead related things in the CPU
+    lllDepthThreshold = Param.Int(2,
+        'Depth threshold after which a request to be considered a long latency load'
+    )
+

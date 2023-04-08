@@ -50,7 +50,7 @@
 #include "debug/Activity.hh"
 #include "debug/O3PipeView.hh"
 #include "debug/Rename.hh"
-#include "debug/RunaheadCPU.hh"
+#include "debug/RunaheadRename.hh"
 #include "params/BaseRunaheadCPU.hh"
 #include "cpu/runahead/rob.hh"
 
@@ -67,6 +67,7 @@ Rename::Rename(CPU *_cpu, const BaseRunaheadCPUParams &params)
       commitToRenameDelay(params.commitToRenameDelay),
       renameWidth(params.renameWidth),
       numThreads(params.numThreads),
+      lllDepthThreshold(params.lllDepthThreshold),
       stats(_cpu)
 {
     if (renameWidth > MaxWidth)
@@ -74,6 +75,7 @@ Rename::Rename(CPU *_cpu, const BaseRunaheadCPUParams &params)
              "\tincrease MaxWidth in src/cpu/runahead/limits.hh\n",
              renameWidth, static_cast<int>(MaxWidth));
     
+    DPRINTF(RunaheadRename, "Created runahead rename stage\n");
 
     // @todo: Make into a parameter.
     skidBufferMax = (decodeToRenameDelay + 1) * params.decodeWidth;
@@ -96,6 +98,8 @@ Rename::name() const
 {
     return cpu->name() + ".rename";
 }
+
+void Rename::setROB(gem5::runahead::ROB *rob_ptr) { rob = rob_ptr; }
 
 Rename::RenameStats::RenameStats(statistics::Group *parent)
     : statistics::Group(parent, "rename"),
@@ -551,6 +555,13 @@ Rename::renameInsts(ThreadID tid)
 
         blockThisCycle = true;
 
+        // ROB full, check if the staller is a load instruction
+        if (source == ROB) {
+            bool lllBlocker = checkROBStallerIsLLL(tid);
+            if (lllBlocker)
+                DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
+        }
+
         block(tid);
 
         incrFullStat(source);
@@ -567,6 +578,14 @@ Rename::renameInsts(ThreadID tid)
         insts_available = min_free_entries;
 
         blockThisCycle = true;
+
+        // ROB size was the limiting factor.
+        // Mark that we should check if the head turns out to be a LLL.
+        if (source == ROB) {
+            bool lllBlocker = checkROBStallerIsLLL(tid);
+            if (lllBlocker)
+                DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
+        }
 
         incrFullStat(source);
     }
@@ -754,6 +773,54 @@ Rename::renameInsts(ThreadID tid)
         block(tid);
         toDecode->renameUnblock[tid] = false;
     }
+}
+
+bool
+Rename::checkROBStallerIsLLL(ThreadID tid)
+{
+    const DynInstPtr &head = rob->readHeadInst(tid);
+
+    // Not a load
+    if (!head->isLoad()) {
+        return false;
+    }
+
+    // Can't track if this a LLL yet
+    if(!head->hasRequest()) {
+        return false;
+    }
+
+    gem5::runahead::LSQ::LSQRequest *lsqRequest = head->savedRequest;
+    if (lsqRequest == nullptr) {
+        return false;
+    }
+
+    if(!lsqRequest->isComplete()) {
+        DPRINTF(RunaheadRename, "[tid:%i] ROB is blocked by in-flight load instruction. "
+                             "Associated requests:\n", tid);
+
+        for (int idx = 0; idx < lsqRequest->_reqs.size(); idx++) {
+            RequestPtr request = lsqRequest->req(idx);
+            int depth = request->getAccessDepth();
+
+            Addr vaddr = 0;
+            Addr paddr = 0;
+            if (request->hasVaddr())
+                vaddr = request->getVaddr();
+            if (request->hasPaddr())
+                paddr = request->getPaddr();
+            DPRINTF(RunaheadRename, "[tid:%i] Request %d for address (v0x%llx, p0x%llx) "
+                                 "hit at depth %i\n",
+                                 tid, idx+1, vaddr, paddr, depth);
+
+            if (depth >= lllDepthThreshold) {
+                ++stats.lllBlocks;
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void
