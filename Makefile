@@ -31,14 +31,14 @@ dev:
 ### for use inside a dev container ###
 .PHONY: gem5 run
 
-BUILD_THREADS=13
+BUILD_THREADS=4
 # ARM/NULL/MIPS/POWER/RISCV/SPARC/X86
 # case sensitive
 ISA=X86
 # debug/opt/fast
 BUILD_VARIANT=opt
 
-GEM5_EXTRAS=$(MOUNT_GUEST_DIR)/gem5-extensions/src
+GEM5_EXTRAS=$(HOME)/gem5-runahead/gem5-extensions/src
 
 gem5:
 	cd gem5; scons EXTRAS=$(GEM5_EXTRAS) build/$(ISA)/gem5.$(BUILD_VARIANT) -j$(BUILD_THREADS)
