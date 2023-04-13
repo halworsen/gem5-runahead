@@ -52,6 +52,7 @@
 #include "arch/generic/pcstate.hh"
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
+#include "cpu/runahead/arch_checkpoint.hh"
 #include "cpu/runahead/comm.hh"
 #include "cpu/runahead/commit.hh"
 #include "cpu/runahead/decode.hh"
@@ -372,6 +373,31 @@ class CPU : public BaseCPU
     /** Debug function to print all instructions on the list. */
     void dumpInsts();
 
+private:
+    /** The instruction that caused us to enter runahead mode */
+    //const DynInstPtr runaheadStartInst[MaxThreads];
+
+    /** Tracks which threads are in runahead */
+    bool runaheadStatus[MaxThreads];
+
+    /** Running architectural state checkpoint */
+    ArchCheckpoint archStateCheckpoint;
+
+  public:
+    /** Enter runahead, starting from the instruction at the head of the ROB */
+    void enterRunahead(ThreadID tid);
+
+    /** Exit runahead, resuming from the instruction that caused us to enter runahead */
+    void exitRunahead(ThreadID tid);
+
+    /** Find whether or not a thread is currently in runahead */
+    bool inRunahead(ThreadID tid) { return runaheadStatus[tid]; };
+
+    /** Set whether or not a thread is in runahead */
+    void inRunahead(ThreadID tid, bool state) { runaheadStatus[tid] = state; };
+
+    /** Update the architectural state checkpoint to reflect CPU state after retirement of inst */
+    void updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst);
   public:
 #ifndef NDEBUG
     /** Count of total number of dynamic instructions in flight. */
@@ -614,6 +640,11 @@ class CPU : public BaseCPU
         //number of misc
         statistics::Scalar miscRegfileReads;
         statistics::Scalar miscRegfileWrites;
+
+        /** Runahead statistics */
+
+        // Amount of times runahead was entered
+        statistics::Scalar runaheadPeriods;
     } cpuStats;
 
   public:

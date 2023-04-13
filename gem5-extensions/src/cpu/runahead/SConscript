@@ -34,6 +34,7 @@ if env['CONF']['TARGET_ISA'] != 'null':
     SimObject('RunaheadFUPool.py', sim_objects=['RunaheadFUPool'])
     SimObject('BaseRunaheadCPU.py', sim_objects=['BaseRunaheadCPU'])
 
+    Source('arch_checkpoint.cc')
     Source('commit.cc')
     Source('cpu.cc')
     Source('decode.cc')
@@ -57,8 +58,9 @@ if env['CONF']['TARGET_ISA'] != 'null':
 
     DebugFlag('RunaheadCPU')
     DebugFlag('RunaheadRename')
+    DebugFlag('RunaheadCheckpoint')
 
-    CompoundFlag('Runahead', ['RunaheadCPU', 'RunaheadRename'])
+    CompoundFlag('Runahead', ['RunaheadCPU', 'RunaheadRename', 'RunaheadCheckpoint'])
 
     SimObject('BaseRunaheadChecker.py', sim_objects=['BaseRunaheadChecker'])
     Source('checker.cc')

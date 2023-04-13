@@ -1304,6 +1304,11 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
                                  head_inst->renamedDestIdx(i));
     }
 
+    // Incremental update of arch checkpoint
+    if (!cpu->inRunahead(tid)) {
+        cpu->updateArchCheckpoint(tid, head_inst);
+    }
+
     // hardware transactional memory
     // the HTM UID is purely for correctness and debugging purposes
     if (head_inst->isHtmStart())

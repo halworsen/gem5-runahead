@@ -561,8 +561,10 @@ Rename::renameInsts(ThreadID tid)
         // ROB full, check if the staller is a load instruction
         if (source == ROB) {
             bool lllBlocker = checkROBStallerIsLLL(tid);
-            if (lllBlocker)
+            if (lllBlocker) {
                 DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
+                cpu->enterRunahead(tid);
+            }
         }
 
         block(tid);
@@ -806,15 +808,9 @@ Rename::checkROBStallerIsLLL(ThreadID tid)
             RequestPtr request = lsqRequest->req(idx);
             int depth = request->getAccessDepth();
 
-            Addr vaddr = 0;
-            Addr paddr = 0;
-            if (request->hasVaddr())
-                vaddr = request->getVaddr();
-            if (request->hasPaddr())
-                paddr = request->getPaddr();
-            DPRINTF(RunaheadRename, "[tid:%i] Request %d for address (v0x%llx, p0x%llx) "
-                                 "hit at depth %i\n",
-                                 tid, idx+1, vaddr, paddr, depth);
+            DPRINTF(RunaheadRename,
+                "[tid:%i] Request #%d hit at depth %d\n",
+                tid, idx+1, depth);
 
             if (depth >= lllDepthThreshold) {
                 ++stats.lllBlocks;

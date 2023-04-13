@@ -78,6 +78,7 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
                 false, Event::CPU_Tick_Pri),
       threadExitEvent([this]{ exitThreads(); }, "RunaheadCPU exit threads",
                 false, Event::CPU_Exit_Pri),
+      archStateCheckpoint(this, params),
 #ifndef NDEBUG
       instcount(0),
 #endif
@@ -370,7 +371,9 @@ CPU::CPUStats::CPUStats(CPU *cpu)
       ADD_STAT(miscRegfileReads, statistics::units::Count::get(),
                "number of misc regfile reads"),
       ADD_STAT(miscRegfileWrites, statistics::units::Count::get(),
-               "number of misc regfile writes")
+               "number of misc regfile writes"),
+      ADD_STAT(runaheadPeriods, statistics::units::Count::get(),
+               "Amount of times runahead was entered")
 {
     // Register any of the RunaheadCPU's stats here.
     timesIdled
@@ -445,6 +448,9 @@ CPU::CPUStats::CPUStats(CPU *cpu)
 
     miscRegfileWrites
         .prereq(miscRegfileWrites);
+    
+    runaheadPeriods
+        .prereq(runaheadPeriods);
 }
 
 void
@@ -1386,6 +1392,56 @@ CPU::dumpInsts()
                 (*inst_list_it)->isSquashed());
         inst_list_it++;
         ++num;
+    }
+}
+
+void
+CPU::enterRunahead(ThreadID tid)
+{
+    const DynInstPtr &robHead = rob.readHeadInst(tid);
+    assert(robHead->isLoad());
+
+    DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead.\n", tid);
+    inRunahead(tid, true);
+
+    // Mark the LLL as poisoned. This will cause IEW to resolve it ASAP and continue
+    robHead->setPoisoned();
+}
+
+void
+CPU::exitRunahead(ThreadID tid)
+{
+    // todo :)
+    inRunahead(tid, false);
+}
+
+void
+CPU::updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst)
+{
+    DPRINTF(RunaheadCPU, "[tid:%i] update checkpoint to pc %#x\n", tid, inst->pcState().instAddr());
+
+    // big heap of debug stuff
+    // DPRINTF(RunaheadCPU, "[tid:%i] instruction disassembly:\n%s\n", tid, inst->staticInst->disassemble(inst->pcState().instAddr()));
+    // // commited state
+    // DPRINTF(RunaheadCPU, "[tid:%i] inst had %i src regs, %i dest regs\n", tid, inst->numSrcRegs(), inst->numDestRegs());
+    // for (int i = 0; i < inst->numSrcRegs(); i++) {
+    //     const RegId &srcReg = inst->srcRegIdx(i);
+    //     PhysRegIdPtr renamedSrcReg = inst->renamedSrcIdx(i);
+    //     DPRINTF(RunaheadCPU, "[tid:%i] src reg %i (%s): r%i (renamed %i, flat %i)\n",
+    //         tid, i, srcReg.className(), srcReg.index(), renamedSrcReg->index(), renamedSrcReg->flatIndex());
+    // }
+    // for (int i = 0; i < inst->numDestRegs(); i++) {
+    //     const RegId &destReg = inst->destRegIdx(i);
+    //     PhysRegIdPtr renamedDestReg = inst->renamedDestIdx(i);
+    //     const RegId &flattenedDestReg = inst->flattenedDestIdx(i);
+    //     DPRINTF(RunaheadCPU, "[tid:%i] dest reg %i (%s): r%i (renamed %i, renamed flat %i, flat %i)\n",
+    //         tid, i, destReg.className(), destReg.index(), renamedDestReg->index(), renamedDestReg->flatIndex(), flattenedDestReg.index());
+    // }
+
+    archStateCheckpoint.setPC(tid, inst->pcState().instAddr());
+
+    for (int i = 0; i < inst->numDestRegs(); i++) {
+        archStateCheckpoint.updateReg(tid, inst->flattenedDestIdx(i));
     }
 }
 /*
