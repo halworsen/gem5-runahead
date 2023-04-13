@@ -563,7 +563,7 @@ Rename::renameInsts(ThreadID tid)
             bool lllBlocker = checkROBStallerIsLLL(tid);
             if (lllBlocker) {
                 DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
-                cpu->enterRunahead(tid);
+                //cpu->enterRunahead(tid);
             }
         }
 
@@ -588,8 +588,10 @@ Rename::renameInsts(ThreadID tid)
         // Mark that we should check if the head turns out to be a LLL.
         if (source == ROB) {
             bool lllBlocker = checkROBStallerIsLLL(tid);
-            if (lllBlocker)
+            if (lllBlocker) {
                 DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
+                //cpu->enterRunahead(tid);
+            }
         }
 
         incrFullStat(source);
@@ -1117,6 +1119,12 @@ Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
                 renamed_reg->className());
 
         inst->renameSrcReg(src_idx, renamed_reg);
+
+        // If in runahead and the instruction sources an invalid register, the instruction becomes poisoned
+        if (cpu->regPoisoned(renamed_reg)) {
+            assert(cpu->inRunahead(tid));
+            inst->setPoisoned();
+        }
 
         // See if the register is ready or not.
         if (scoreboard->getReg(renamed_reg)) {

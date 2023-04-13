@@ -1298,10 +1298,15 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
                 tid, head_inst->seqNum, head_inst->pcState());
     }
 
-    // Update the commit rename map
     for (int i = 0; i < head_inst->numDestRegs(); i++) {
+        // Update the commit rename map
         renameMap[tid]->setEntry(head_inst->flattenedDestIdx(i),
                                  head_inst->renamedDestIdx(i));
+        
+        // Mark all destination registers as poisoned if the instruction was poisoned
+        if (head_inst->isPoisoned()) {
+            head_inst->renamedDestIdx(i);
+        }
     }
 
     // Incremental update of arch checkpoint

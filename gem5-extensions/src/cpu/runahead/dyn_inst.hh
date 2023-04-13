@@ -168,6 +168,7 @@ class DynInst : public ExecContext, public RefCounted
                                  /// instructions ahead of it
         SerializeAfter,          /// Needs to serialize instructions behind it
         SerializeHandled,        /// Serialization has been handled
+        Poisoned,                /// Instruction produces invalid results
         NumStatus
     };
 
@@ -843,6 +844,12 @@ class DynInst : public ExecContext, public RefCounted
 
     /** Returns whether pinned registers are renamed */
     bool isPinnedRegsRenamed() const { return status[PinnedRegsRenamed]; }
+
+    /** Marks this instruction as poisoned */
+    void setPoisoned() { status.set(Poisoned); }
+
+    /** Returns whether or not this instruction is poisoned */
+    bool isPoisoned() const { return status[Poisoned]; }
 
     /** Sets the destination registers as renamed */
     void

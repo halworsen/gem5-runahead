@@ -374,8 +374,8 @@ class CPU : public BaseCPU
     void dumpInsts();
 
 private:
-    /** The instruction that caused us to enter runahead mode */
-    //const DynInstPtr runaheadStartInst[MaxThreads];
+    /** The memory request that caused us to enter runahead mode */
+    const LSQRequest *runaheadCause[MaxThreads];
 
     /** Tracks which threads are in runahead */
     bool runaheadStatus[MaxThreads];
@@ -396,8 +396,18 @@ private:
     /** Set whether or not a thread is in runahead */
     void inRunahead(ThreadID tid, bool state) { runaheadStatus[tid] = state; };
 
+    /** Check if the given instruction caused the CPU to enter runahead */
+    bool instCausedRunahead(const DynInstPtr &inst);
+
     /** Update the architectural state checkpoint to reflect CPU state after retirement of inst */
     void updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst);
+
+    /** Check if a register is marked as poisoned/invalid */
+    bool regPoisoned(PhysRegIdPtr reg) { return regFile.regPoisoned(reg); };
+
+    /** Mark/unmark a register as poisoned */
+    void regPoisoned(PhysRegIdPtr reg, bool poisoned);
+
   public:
 #ifndef NDEBUG
     /** Count of total number of dynamic instructions in flight. */
@@ -645,6 +655,32 @@ private:
 
         // Amount of times runahead was entered
         statistics::Scalar runaheadPeriods;
+
+        // Amount of times an integer register was marked as poisoned
+        statistics::Scalar intRegPoisoned;
+        // Amount of times an integer register's poison was reset
+        statistics::Scalar intRegCured;
+        // Amount of times a float register was marked as poisoned
+        statistics::Scalar floatRegPoisoned;
+        // Amount of times a float register's poison was reset
+        statistics::Scalar floatRegCured;
+        // Amount of times a vector register was marked as poisoned
+        statistics::Scalar vecRegPoisoned;
+        // Amount of times a vector register's poison was reset
+        statistics::Scalar vecRegCured;
+        // Amount of times a predicate register was marked as poisoned
+        statistics::Scalar vecPredRegPoisoned;
+        // Amount of times a predicate register's poison was reset
+        statistics::Scalar vecPredRegCured;
+        // Amount of times a CC register was marked as poisoned
+        statistics::Scalar ccRegPoisoned;
+        // Amount of times a CC register's poison was reset
+        statistics::Scalar ccRegCured;
+        // Amount of times a misc register was marked as poisoned
+        statistics::Scalar miscRegPoisoned;
+        // Amount of times a misc register's poison was reset
+        statistics::Scalar miscRegCured;
+
     } cpuStats;
 
   public:

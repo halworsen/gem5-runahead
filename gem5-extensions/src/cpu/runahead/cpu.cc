@@ -373,7 +373,31 @@ CPU::CPUStats::CPUStats(CPU *cpu)
       ADD_STAT(miscRegfileWrites, statistics::units::Count::get(),
                "number of misc regfile writes"),
       ADD_STAT(runaheadPeriods, statistics::units::Count::get(),
-               "Amount of times runahead was entered")
+               "Amount of times runahead was entered"),
+      ADD_STAT(intRegPoisoned, statistics::units::Count::get(),
+               "Amount of times an integer register was marked as poisoned"),
+      ADD_STAT(intRegCured, statistics::units::Count::get(),
+               "Amount of times an integer register's poison was reset"),
+      ADD_STAT(floatRegPoisoned, statistics::units::Count::get(),
+               "Amount of times a float register was marked as poisoned"),
+      ADD_STAT(floatRegCured, statistics::units::Count::get(),
+               "Amount of times a float register's poison was reset"),
+      ADD_STAT(vecRegPoisoned, statistics::units::Count::get(),
+               "Amount of times a vector register was marked as poisoned"),
+      ADD_STAT(vecRegCured, statistics::units::Count::get(),
+               "Amount of times a vector register's poison was reset"),
+      ADD_STAT(vecPredRegPoisoned, statistics::units::Count::get(),
+               "Amount of times a predicate register was marked as poisoned"),
+      ADD_STAT(vecPredRegCured, statistics::units::Count::get(),
+               "Amount of times a predicate register's poison was reset"),
+      ADD_STAT(ccRegPoisoned, statistics::units::Count::get(),
+               "Amount of times a CC register was marked as poisoned"),
+      ADD_STAT(ccRegCured, statistics::units::Count::get(),
+               "Amount of times a CC register's poison was reset"),
+      ADD_STAT(miscRegPoisoned, statistics::units::Count::get(),
+               "Amount of times a misc register was marked as poisoned"),
+      ADD_STAT(miscRegCured, statistics::units::Count::get(),
+               "Amount of times a misc register's poison was reset"),
 {
     // Register any of the RunaheadCPU's stats here.
     timesIdled
@@ -451,6 +475,42 @@ CPU::CPUStats::CPUStats(CPU *cpu)
     
     runaheadPeriods
         .prereq(runaheadPeriods);
+    
+    intRegPoisoned
+        .prereq(intRegPoisoned);
+    
+    intRegCured
+        .prereq(intRegCured);
+
+    floatRegPoisoned
+        .prereq(floatRegPoisoned);
+    
+    floatRegCured
+        .prereq(floatRegCured);
+
+    vecRegPoisoned
+        .prereq(vecRegPoisoned);
+    
+    vecRegCured
+        .prereq(vecRegCured);
+
+    vecPredRegPoisoned
+        .prereq(vecPredRegPoisoned);
+    
+    vecPredRegCured
+        .prereq(vecPredRegCured);
+
+    ccRegPoisoned
+        .prereq(ccRegPoisoned);
+    
+    ccRegCured
+        .prereq(ccRegCured);
+
+    miscRegPoisoned
+        .prereq(miscRegPoisoned);
+    
+    miscRegCured
+        .prereq(miscRegCured);
 }
 
 void
@@ -1402,10 +1462,19 @@ CPU::enterRunahead(ThreadID tid)
     assert(robHead->isLoad());
 
     DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead.\n", tid);
-    inRunahead(tid, true);
+    // Store the LSQ request associated with the LLL that caused entry into runahead
+    // We'll be waiting for this request to complete before we can exit runahead
+    LSQRequest *lsqRequest = robHead->savedRequest;
+    runaheadCause[tid] = lsqRequest;
 
-    // Mark the LLL as poisoned. This will cause IEW to resolve it ASAP and continue
+    // Instantly "complete" the LLL
     robHead->setPoisoned();
+    robHead->setExecuted();
+    robHead->completeAcc(nullptr);
+    iew.instToCommit(robHead);
+    iew.activityThisCycle();
+
+    inRunahead(tid, true);
 }
 
 void
@@ -1413,6 +1482,18 @@ CPU::exitRunahead(ThreadID tid)
 {
     // todo :)
     inRunahead(tid, false);
+}
+
+bool
+CPU::instCausedRunahead(const DynInstPtr &inst)
+{
+    ThreadID tid = inst->threadNumber;
+    // The thread isn't even running ahead
+    if (!inRunahead(tid)) {
+        return false;
+    }
+
+    return inst->savedRequest == runaheadCause[tid];
 }
 
 void
@@ -1444,6 +1525,62 @@ CPU::updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst)
         archStateCheckpoint.updateReg(tid, inst->flattenedDestIdx(i));
     }
 }
+
+void
+CPU::regPoisoned(PhysRegIdPtr physReg, bool poisoned)
+{
+    if (poisoned) {
+        switch (physReg->classValue()) {
+        case IntRegClass:
+            cpuStats.intRegPoisoned++;
+            break;
+        case FloatRegClass:
+            cpuStats.floatRegPoisoned++;
+            break;
+        case CCRegClass:
+            cpuStats.ccRegPoisoned++;
+            break;
+        case VecRegClass:
+        case VecElemClass:
+            cpuStats.vecRegPoisoned++;
+            break;
+        case VecPredRegClass:
+            cpuStats.vecPredRegPoisoned++;
+            break;
+        case MiscRegClass:
+            cpuStats.miscRegPoisoned++;
+            break;
+        default:
+            break;
+        }
+    } else {
+        switch (physReg->classValue()) {
+        case IntRegClass:
+            cpuStats.intRegCured++;
+            break;
+        case FloatRegClass:
+            cpuStats.floatRegCured++;
+            break;
+        case CCRegClass:
+            cpuStats.ccRegCured++;
+            break;
+        case VecRegClass:
+        case VecElemClass:
+            cpuStats.vecRegCured++;
+            break;
+        case VecPredRegClass:
+            cpuStats.vecPredRegCured++;
+            break;
+        case MiscRegClass:
+            cpuStats.miscRegCured++;
+            break;
+        default:
+            break;
+        }
+    }
+    regFile.regPoisoned(physReg, poisoned);
+}
+
 /*
 void
 CPU::wakeDependents(const DynInstPtr &inst)

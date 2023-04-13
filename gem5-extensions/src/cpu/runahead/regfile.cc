@@ -120,6 +120,11 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
             phys_reg++) {
         miscRegIds.emplace_back(MiscRegClass, phys_reg, 0);
     }
+
+    // No registers are poisoned to begin with
+    for (int regIdx = 0; regIdx < (flat_reg_idx + 1); regIdx++) {
+        poisonedRegs.emplace_back(false);
+    }
 }
 
 

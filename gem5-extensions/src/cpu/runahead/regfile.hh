@@ -100,6 +100,9 @@ class PhysRegFile
     /** Misc Reg Ids */
     std::vector<PhysRegId> miscRegIds;
 
+    /** Flat list of poisoned registers */
+    std::vector<bool> poisonedRegs;
+
     /**
      * Number of physical general purpose registers
      */
@@ -310,6 +313,22 @@ class PhysRegFile
           default:
             panic("Unrecognized register class type %d.", type);
         }
+    }
+
+    /** Check if a register is poisoned/invalid */
+    bool
+    regPoisoned(PhysRegIdPtr physReg)
+    {
+        const RegIndex idx = physReg->index();
+        return poisonedRegs[idx];
+    }
+
+    /** Mark/unmark a register as poisoned/invalid */
+    void
+    regPoisoned(PhysRegIdPtr physReg, bool poisoned)
+    {
+        const RegIndex idx = physReg->index();
+        poisonedRegs[idx] = poisoned;
     }
 
     /**
