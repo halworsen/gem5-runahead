@@ -1305,7 +1305,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         
         // Mark all destination registers as poisoned if the instruction was poisoned
         if (head_inst->isPoisoned()) {
-            head_inst->renamedDestIdx(i);
+            cpu->regPoisoned(head_inst->renamedDestIdx(i), true);
         }
     }
 

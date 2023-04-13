@@ -397,7 +397,7 @@ CPU::CPUStats::CPUStats(CPU *cpu)
       ADD_STAT(miscRegPoisoned, statistics::units::Count::get(),
                "Amount of times a misc register was marked as poisoned"),
       ADD_STAT(miscRegCured, statistics::units::Count::get(),
-               "Amount of times a misc register's poison was reset"),
+               "Amount of times a misc register's poison was reset")
 {
     // Register any of the RunaheadCPU's stats here.
     timesIdled
