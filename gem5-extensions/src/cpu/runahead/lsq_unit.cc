@@ -164,6 +164,12 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
 
     cpu->ppDataAccessComplete->notify(std::make_pair(inst, pkt));
 
+    // Check if the instruction caused runahead
+    if (cpu->instCausedRunahead(inst)) {
+        // If so, we can exit runahead and resume normal execution
+        cpu->exitRunahead(inst->threadNumber);
+    }
+
     assert(!cpu->switchedOut());
     if (!inst->isSquashed()) {
         if (request->needWBToRegister()) {
@@ -600,7 +606,8 @@ LSQUnit::executeLoad(const DynInstPtr &inst)
     assert(!inst->isSquashed());
 
     // Poisoned runahead loads do not get to perform memory accesses
-    if (!inst->isPoisoned())
+    // DEBUG
+    //if (!inst->isPoisoned())
     load_fault = inst->initiateAcc();
 
     if (load_fault == NoFault && !inst->readMemAccPredicate()) {
@@ -613,23 +620,24 @@ LSQUnit::executeLoad(const DynInstPtr &inst)
     }
 
     // Runahead load results are ignored and their destination is poisoned
-    ThreadID tid = inst->threadNumber;
-    if (cpu->inRunahead(tid)) {
-        DPRINTF(RunaheadLSQ,
-                "Load PC %s was a runahead load, poisoning.\n",
-                inst->pcState());
-        // inst may already be poisoned, this is just to poison valid loads
-        inst->setPoisoned();
-        inst->setExecuted();
-        inst->completeAcc(nullptr);
-        iewStage->instToCommit(inst);
-        iewStage->activityThisCycle();
-        return NoFault;
-    }
+    // DEBUG
+    // ThreadID tid = inst->threadNumber;
+    // if (cpu->inRunahead(tid)) {
+    //     DPRINTF(RunaheadLSQ,
+    //             "Load PC %s was a runahead load, poisoning.\n",
+    //             inst->pcState());
+    //     // inst may already be poisoned, this is just to poison valid loads
+    //     inst->setPoisoned();
+    //     inst->setExecuted();
+    //     inst->completeAcc(nullptr);
+    //     iewStage->instToCommit(inst);
+    //     iewStage->activityThisCycle();
+    //     return NoFault;
+    // }
 
     if (inst->isTranslationDelayed() && load_fault == NoFault)
         return load_fault;
-
+ 
     if (load_fault != NoFault && inst->translationCompleted() &&
             inst->savedRequest->isPartialFault()
             && !inst->savedRequest->isComplete()) {
@@ -812,6 +820,7 @@ LSQUnit::writebackStores()
         writebackBlockedStore();
     }
 
+    // RETODO: do not wb to cache in runahead, wb to runahead cache instead
     while (storesToWB > 0 &&
            storeWBIt.dereferenceable() &&
            storeWBIt->valid() &&
@@ -1103,14 +1112,10 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
 
     // Valid runahead loads do not need to writeback (they instantly complete with poison)
     if (cpu->inRunahead(inst->threadNumber) && inst->isLoad() && inst->isExecuted()) {
-        ++stats.ignoredResponses;
-
-        // But check if this is the load that caused entry into runahead
-        if (cpu->instCausedRunahead(inst)) {
-            // If so, we can exit runahead and resume normal execution
-            //cpu->exitRunahead(inst->threadNumber);
-        }
-        return;
+        // DEBUG
+        //++stats.ignoredResponses;
+        // DEBUG
+        //return;
     }
 
     if (!inst->isExecuted()) {
@@ -1542,6 +1547,8 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
                     // that response packets should be discarded.
                     request->discard();
                 }
+
+                // RETODO: check if store is poisoned, forward that information to dependent loads
 
                 WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt,
                         this);

@@ -319,7 +319,7 @@ class PhysRegFile
     bool
     regPoisoned(PhysRegIdPtr physReg)
     {
-        const RegIndex idx = physReg->index();
+        const RegIndex idx = physReg->flatIndex();
         return poisonedRegs[idx];
     }
 
@@ -327,8 +327,18 @@ class PhysRegFile
     void
     regPoisoned(PhysRegIdPtr physReg, bool poisoned)
     {
-        const RegIndex idx = physReg->index();
+        const RegIndex idx = physReg->flatIndex();
         poisonedRegs[idx] = poisoned;
+    }
+
+    /** Clear poison from all registers in the register file */
+    void
+    clearPoison()
+    {
+        // totalNumRegs does not count misc regs
+        for (int regIdx = 0; regIdx < poisonedRegs.size(); regIdx++) {
+            poisonedRegs[regIdx] = false;
+        }
     }
 
     /**

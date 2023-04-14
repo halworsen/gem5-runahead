@@ -377,27 +377,27 @@ CPU::CPUStats::CPUStats(CPU *cpu)
       ADD_STAT(intRegPoisoned, statistics::units::Count::get(),
                "Amount of times an integer register was marked as poisoned"),
       ADD_STAT(intRegCured, statistics::units::Count::get(),
-               "Amount of times an integer register's poison was reset"),
+               "Amount of times an integer register's poison was reset in runahead"),
       ADD_STAT(floatRegPoisoned, statistics::units::Count::get(),
                "Amount of times a float register was marked as poisoned"),
       ADD_STAT(floatRegCured, statistics::units::Count::get(),
-               "Amount of times a float register's poison was reset"),
+               "Amount of times a float register's poison was reset in runahead"),
       ADD_STAT(vecRegPoisoned, statistics::units::Count::get(),
                "Amount of times a vector register was marked as poisoned"),
       ADD_STAT(vecRegCured, statistics::units::Count::get(),
-               "Amount of times a vector register's poison was reset"),
+               "Amount of times a vector register's poison was reset in runahead"),
       ADD_STAT(vecPredRegPoisoned, statistics::units::Count::get(),
                "Amount of times a predicate register was marked as poisoned"),
       ADD_STAT(vecPredRegCured, statistics::units::Count::get(),
-               "Amount of times a predicate register's poison was reset"),
+               "Amount of times a predicate register's poison was reset in runahead"),
       ADD_STAT(ccRegPoisoned, statistics::units::Count::get(),
                "Amount of times a CC register was marked as poisoned"),
       ADD_STAT(ccRegCured, statistics::units::Count::get(),
-               "Amount of times a CC register's poison was reset"),
+               "Amount of times a CC register's poison was reset in runahead"),
       ADD_STAT(miscRegPoisoned, statistics::units::Count::get(),
                "Amount of times a misc register was marked as poisoned"),
       ADD_STAT(miscRegCured, statistics::units::Count::get(),
-               "Amount of times a misc register's poison was reset")
+               "Amount of times a misc register's poison was reset in runahead")
 {
     // Register any of the RunaheadCPU's stats here.
     timesIdled
@@ -1458,6 +1458,11 @@ CPU::dumpInsts()
 void
 CPU::enterRunahead(ThreadID tid)
 {
+    if (inRunahead(tid)) {
+        DPRINTF(RunaheadCPU, "[tid:%i] Already in runahead, ignoring.\n", tid);
+        return;
+    }
+
     const DynInstPtr &robHead = rob.readHeadInst(tid);
     assert(robHead->isLoad());
 
@@ -1469,10 +1474,10 @@ CPU::enterRunahead(ThreadID tid)
 
     // Instantly "complete" the LLL
     robHead->setPoisoned();
-    robHead->setExecuted();
-    robHead->completeAcc(nullptr);
-    iew.instToCommit(robHead);
-    iew.activityThisCycle();
+    // robHead->setExecuted();
+    // robHead->completeAcc(nullptr);
+    // iew.instToCommit(robHead);
+    // iew.activityThisCycle();
 
     inRunahead(tid, true);
 }
@@ -1480,8 +1485,18 @@ CPU::enterRunahead(ThreadID tid)
 void
 CPU::exitRunahead(ThreadID tid)
 {
+    DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead.\n", tid);
     // todo :)
     inRunahead(tid, false);
+
+    // Restore arch state
+    archStateCheckpoint.restore(tid);
+
+    // Clear all register poison
+    regFile.clearPoison();
+
+    // DEBUG
+    scheduleInstStop(tid, 0, "runahead experiment ended");
 }
 
 bool

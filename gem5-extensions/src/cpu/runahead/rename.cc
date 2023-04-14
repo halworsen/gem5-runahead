@@ -559,11 +559,12 @@ Rename::renameInsts(ThreadID tid)
         blockThisCycle = true;
 
         // ROB full, check if the staller is a load instruction
+        // TODO: move the LLL check to commit? we can check if there are no insts to commit and if the ROB is full
         if (source == ROB) {
             bool lllBlocker = checkROBStallerIsLLL(tid);
             if (lllBlocker) {
                 DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
-                //cpu->enterRunahead(tid);
+                cpu->enterRunahead(tid);
             }
         }
 
@@ -586,11 +587,12 @@ Rename::renameInsts(ThreadID tid)
 
         // ROB size was the limiting factor.
         // Mark that we should check if the head turns out to be a LLL.
+        // TODO: move the LLL check to commit?
         if (source == ROB) {
             bool lllBlocker = checkROBStallerIsLLL(tid);
             if (lllBlocker) {
                 DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
-                //cpu->enterRunahead(tid);
+                cpu->enterRunahead(tid);
             }
         }
 
@@ -803,8 +805,8 @@ Rename::checkROBStallerIsLLL(ThreadID tid)
     }
 
     if(!lsqRequest->isComplete()) {
-        DPRINTF(RunaheadRename, "[tid:%i] ROB is blocked by in-flight load instruction. "
-                             "Associated requests:\n", tid);
+        DPRINTF(RunaheadRename, "[tid:%i] ROB is blocked by in-flight load instruction (PC %s). "
+                             "Associated requests:\n", tid, head->pcState());
 
         for (int idx = 0; idx < lsqRequest->_reqs.size(); idx++) {
             RequestPtr request = lsqRequest->req(idx);
