@@ -585,17 +585,6 @@ Rename::renameInsts(ThreadID tid)
 
         blockThisCycle = true;
 
-        // ROB size was the limiting factor.
-        // Mark that we should check if the head turns out to be a LLL.
-        // TODO: move the LLL check to commit?
-        if (source == ROB) {
-            bool lllBlocker = checkROBStallerIsLLL(tid);
-            if (lllBlocker) {
-                DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
-                cpu->enterRunahead(tid);
-            }
-        }
-
         incrFullStat(source);
     }
 
