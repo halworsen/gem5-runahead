@@ -251,7 +251,7 @@ ROB::retireHead(ThreadID tid)
     DynInstPtr head_inst = std::move(*head_it);
     instList[tid].erase(head_it);
 
-    assert(head_inst->readyToCommit());
+    assert(head_inst->readyToCommit() || head_inst->isPoisoned());
 
     DPRINTF(ROB, "[tid:%i] Retiring head instruction, "
             "instruction PC %s, [sn:%llu]\n", tid, head_inst->pcState(),
@@ -277,7 +277,8 @@ ROB::isHeadReady(ThreadID tid)
 {
     stats.reads++;
     if (threadEntries[tid] != 0) {
-        return instList[tid].front()->readyToCommit();
+        DynInstPtr &head = instList[tid].front();
+        return (head->readyToCommit() || head->isPoisoned());
     }
 
     return false;

@@ -691,7 +691,7 @@ Commit::tick()
         }
 
         const DynInstPtr &headInst = rob->readHeadInst(tid);
-        if (headInst->readyToCommit()) {
+        if (rob->isHeadReady(tid)) {
             // The ROB has more instructions it can commit. Its next status
             // will be active.
             _nextStatus = Active;
@@ -1055,9 +1055,8 @@ Commit::commitInsts()
                         assert(head_inst->isRunahead());
                         DPRINTF(RunaheadCommit,
                                 "[tid:%i] Load was a runahead LLL. "
-                                "Poisoning and continuing.\n", tid);
+                                "Poisoning and continuing next cycle.\n", tid);
                         head_inst->setPoisoned();
-                        head_inst->setExecuted();
                     }
                 }
             }
