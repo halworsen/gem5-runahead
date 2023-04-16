@@ -55,6 +55,7 @@
 #include "debug/Fetch.hh"
 #include "debug/HtmCpu.hh"
 #include "debug/LSQ.hh"
+#include "debug/RunaheadLSQ.hh"
 #include "debug/Writeback.hh"
 #include "params/BaseRunaheadCPU.hh"
 

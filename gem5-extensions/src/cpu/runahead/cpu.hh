@@ -98,6 +98,7 @@ class CPU : public BaseCPU
     typedef std::list<DynInstPtr>::iterator ListIt;
 
     friend class ThreadContext;
+    friend class ArchCheckpoint;
 
   public:
     enum Status
@@ -374,8 +375,8 @@ class CPU : public BaseCPU
     void dumpInsts();
 
 private:
-    /** The memory request that caused us to enter runahead mode */
-    const LSQRequest *runaheadCause[MaxThreads];
+    /** The instruction that caused us to enter runahead mode */
+    DynInstPtr runaheadCause[MaxThreads];
 
     /** Tracks which threads are in runahead */
     bool runaheadStatus[MaxThreads];
@@ -383,7 +384,7 @@ private:
     /** Running architectural state checkpoint */
     ArchCheckpoint archStateCheckpoint;
 
-  public:
+public:
     /** Enter runahead, starting from the instruction at the head of the ROB */
     void enterRunahead(ThreadID tid);
 
@@ -407,6 +408,12 @@ private:
 
     /** Mark/unmark a register as poisoned */
     void regPoisoned(PhysRegIdPtr reg, bool poisoned);
+
+    /** The amount of instructions pseudoretired in the current runahead period */
+    uint64_t instsPseudoretired;
+
+    /** The depth at which a blocking memory request is considered a long latency load */
+    uint8_t lllDepthThreshold;
 
   public:
 #ifndef NDEBUG

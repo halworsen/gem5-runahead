@@ -60,6 +60,7 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
+#include "debug/RunaheadFetch.hh"
 #include "debug/O3CPU.hh"
 #include "debug/O3PipeView.hh"
 #include "mem/packet.hh"
@@ -1063,6 +1064,12 @@ Fetch::buildInst(ThreadID tid, StaticInstPtr staticInst,
 
     DPRINTF(Fetch, "[tid:%i] Instruction is: %s\n", tid,
             instruction->staticInst->disassemble(this_pc.instAddr()));
+
+    if (cpu->inRunahead(tid)) {
+        DPRINTF(RunaheadFetch, "[tid:%i] Instruction (PC %s) was fetched in runahead.\n",
+                tid, this_pc);
+        instruction->setRunahead();
+    }
 
 #if TRACING_ON
     if (trace) {

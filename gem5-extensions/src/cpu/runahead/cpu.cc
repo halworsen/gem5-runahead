@@ -54,6 +54,7 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/RunaheadCPU.hh"
+#include "debug/RunaheadCheckpoint.hh"
 #include "debug/O3CPU.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
@@ -79,6 +80,7 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
       threadExitEvent([this]{ exitThreads(); }, "RunaheadCPU exit threads",
                 false, Event::CPU_Exit_Pri),
       archStateCheckpoint(this, params),
+      lllDepthThreshold(params.lllDepthThreshold),
 #ifndef NDEBUG
       instcount(0),
 #endif
@@ -1466,31 +1468,28 @@ CPU::enterRunahead(ThreadID tid)
     const DynInstPtr &robHead = rob.readHeadInst(tid);
     assert(robHead->isLoad());
 
-    DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead.\n", tid);
-    // Store the LSQ request associated with the LLL that caused entry into runahead
-    // We'll be waiting for this request to complete before we can exit runahead
-    LSQRequest *lsqRequest = robHead->savedRequest;
-    runaheadCause[tid] = lsqRequest;
+    DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead, caused by sn:%llu (PC %s).\n",
+                         tid, robHead->seqNum, robHead->pcState());
+    // Store the instruction that caused entry into runahead
+    runaheadCause[tid] = robHead;
 
-    // Instantly "complete" the LLL
+    // Poison the LLL. This will cause commit to retire it immediately
     robHead->setPoisoned();
-    // robHead->setExecuted();
-    // robHead->completeAcc(nullptr);
-    // iew.instToCommit(robHead);
-    // iew.activityThisCycle();
+
+    // Mark all in-flight instructions as runahead
+    // This will also take care of the ROB head, which is why we only manually set poison above
+    rob.startRunahead(tid);
 
     inRunahead(tid, true);
+    instsPseudoretired = 0;
+    cpuStats.runaheadPeriods++;
 }
 
 void
 CPU::exitRunahead(ThreadID tid)
 {
-    DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead.\n", tid);
-    // todo :)
-    inRunahead(tid, false);
-
-    // Restore arch state
-    archStateCheckpoint.restore(tid);
+    DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead. Instructions pseudoretired: %i\n",
+                         tid, instsPseudoretired);
 
     // Clear all register poison
     regFile.clearPoison();
@@ -1508,13 +1507,16 @@ CPU::instCausedRunahead(const DynInstPtr &inst)
         return false;
     }
 
-    return inst->savedRequest == runaheadCause[tid];
+    return inst == runaheadCause[tid];
 }
 
 void
 CPU::updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst)
 {
-    DPRINTF(RunaheadCPU, "[tid:%i] update checkpoint to pc %#x\n", tid, inst->pcState().instAddr());
+    // Arch state checkpointing should never occur in runahead
+    assert(!inRunahead(tid));
+    DPRINTF(RunaheadCheckpoint, "[tid:%i] [sn:%llu] Update arch checkpoint to PC %s\n",
+                                tid, inst->seqNum, inst->pcState());
 
     // big heap of debug stuff
     // DPRINTF(RunaheadCPU, "[tid:%i] instruction disassembly:\n%s\n", tid, inst->staticInst->disassemble(inst->pcState().instAddr()));

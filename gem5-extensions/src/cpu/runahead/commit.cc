@@ -59,6 +59,7 @@
 #include "cpu/timebuf.hh"
 #include "debug/Activity.hh"
 #include "debug/Commit.hh"
+#include "debug/RunaheadCommit.hh"
 #include "debug/CommitRate.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
@@ -181,7 +182,15 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
       ADD_STAT(committedInstType, statistics::units::Count::get(),
                "Class of committed instruction"),
       ADD_STAT(commitEligibleSamples, statistics::units::Cycle::get(),
-               "number cycles where commit BW limit reached")
+               "number cycles where commit BW limit reached"),
+      ADD_STAT(loadsAtROBHead, statistics::units::Count::get(),
+               "Total amount of loads that made it to ROB head during commit"),
+      ADD_STAT(lllAtROBHead, statistics::units::Count::get(),
+               "Total amount of LLLs that made it to ROB head during commit"),
+      ADD_STAT(instsPseudoretired, statistics::units::Count::get(),
+               "Number of instructions committed in runahead"),
+      ADD_STAT(commitPoisonedInsts, statistics::units::Count::get(),
+               "Number of poisoned instructions retired by commit")
 {
     using namespace statistics;
 
@@ -242,6 +251,12 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
         .flags(total | pdf | dist);
 
     committedInstType.ysubnames(enums::OpClassStrings);
+
+    loadsAtROBHead.prereq(loadsAtROBHead);
+    lllAtROBHead.prereq(lllAtROBHead);
+    instsPseudoretired
+        .init(cpu->numThreads)
+        .flags(total);
 }
 
 void
@@ -668,30 +683,29 @@ Commit::tick()
 
     while (threads != end) {
         ThreadID tid = *threads++;
+        DPRINTF(Commit, "[tid:%i] ROB has %d insts & %d free entries.\n",
+                tid, rob->countInsts(tid), rob->numFreeEntries(tid));
 
-        if (!rob->isEmpty(tid) && rob->readHeadInst(tid)->readyToCommit()) {
+        if (rob->isEmpty(tid)) {
+            continue;
+        }
+
+        const DynInstPtr &headInst = rob->readHeadInst(tid);
+        if (headInst->readyToCommit()) {
             // The ROB has more instructions it can commit. Its next status
             // will be active.
             _nextStatus = Active;
 
-            [[maybe_unused]] const DynInstPtr &inst = rob->readHeadInst(tid);
-
             DPRINTF(Commit,"[tid:%i] Instruction [sn:%llu] PC %s is head of"
                     " ROB and ready to commit\n",
-                    tid, inst->seqNum, inst->pcState());
-
-        } else if (!rob->isEmpty(tid)) {
-            const DynInstPtr &inst = rob->readHeadInst(tid);
-
-            ppCommitStall->notify(inst);
+                    tid, headInst->seqNum, headInst->pcState());
+        } else {
+            ppCommitStall->notify(headInst);
 
             DPRINTF(Commit,"[tid:%i] Can't commit, Instruction [sn:%llu] PC "
                     "%s is head of ROB and not ready\n",
-                    tid, inst->seqNum, inst->pcState());
+                    tid, headInst->seqNum, headInst->pcState());
         }
-
-        DPRINTF(Commit, "[tid:%i] ROB has %d insts & %d free entries.\n",
-                tid, rob->countInsts(tid), rob->numFreeEntries(tid));
     }
 
 
@@ -984,14 +998,65 @@ Commit::commitInsts()
 
         // ThreadID commit_thread = getCommittingThread();
 
-        if (commit_thread == -1 || !rob->isHeadReady(commit_thread))
+        if (commit_thread == -1)
             break;
 
         head_inst = rob->readHeadInst(commit_thread);
+        if (!head_inst)
+            break;
 
         ThreadID tid = head_inst->threadNumber;
-
         assert(tid == commit_thread);
+
+        // If the ROB head isn't ready, investigate if it's a load we should run ahead of
+        if (!rob->isHeadReady(commit_thread)) {
+            // Must be a load with an in-flight memory request to cause runahead
+            if (!head_inst->isLoad() || !head_inst->hasRequest()) {
+                break;
+            }
+
+            ++stats.loadsAtROBHead;
+
+            gem5::runahead::LSQ::LSQRequest *lsqRequest = head_inst->savedRequest;
+            // That request must not be completed
+            // This may be unnecessary? Load may be marked as ready when the request completes
+            if (lsqRequest->isComplete()) {
+                break;
+            }
+
+            DPRINTF(RunaheadCommit,
+                    "[tid:%i] In-flight load reached the head of the ROB during commit "
+                    "[sn:%llu] (PC %s). Associated requests:\n",
+                    tid, head_inst->seqNum, head_inst->pcState());
+
+            for (int idx = 0; idx < lsqRequest->_reqs.size(); idx++) {
+                RequestPtr request = lsqRequest->req(idx);
+                int depth = request->getAccessDepth();
+
+                DPRINTF(RunaheadCommit,
+                    "[tid:%i] Request #%d hit at depth %d\n",
+                    tid, idx+1, depth);
+
+                if (depth >= cpu->lllDepthThreshold) {
+                    ++stats.lllAtROBHead;
+
+                    // If not already in runahead, enter it
+                    if (!cpu->inRunahead(tid)) {
+                        cpu->enterRunahead(tid);
+                    } else {
+                        // If in runahead, immediately "complete" it to avoid blocking on it
+                        assert(head_inst->isRunahead());
+                        DPRINTF(RunaheadCommit,
+                                "[tid:%i] Load was a runahead LLL. "
+                                "Poisoning and continuing.\n", tid);
+                        head_inst->setPoisoned();
+                        head_inst->setExecuted();
+                    }
+                }
+            }
+            
+            break;
+        }
 
         DPRINTF(Commit,
                 "Trying to commit head instruction, [tid:%i] [sn:%llu]\n",
@@ -1149,7 +1214,8 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
     // If the instruction is not executed yet, then it will need extra
     // handling.  Signal backwards that it should be executed.
-    if (!head_inst->isExecuted()) {
+    // Poisoned instructions don't need to execute to retire.
+    if (!head_inst->isExecuted() && !head_inst->isPoisoned()) {
         // Make sure we are only trying to commit un-executed instructions we
         // think are possible.
         assert(head_inst->isNonSpeculative() || head_inst->isStoreConditional()
@@ -1302,15 +1368,16 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         // Update the commit rename map
         renameMap[tid]->setEntry(head_inst->flattenedDestIdx(i),
                                  head_inst->renamedDestIdx(i));
-        
+
         // Mark all destination registers as poisoned if the instruction was poisoned
         if (head_inst->isPoisoned()) {
+            assert(cpu->inRunahead(tid));
             cpu->regPoisoned(head_inst->renamedDestIdx(i), true);
         }
     }
 
     // Incremental update of arch checkpoint
-    if (!cpu->inRunahead(tid)) {
+    if (!head_inst->isRunahead()) {
         cpu->updateArchCheckpoint(tid, head_inst);
     }
 
@@ -1394,8 +1461,16 @@ Commit::updateComInstStats(const DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
 
-    if (!inst->isMicroop() || inst->isLastMicroop())
+    if (!inst->isMicroop() || inst->isLastMicroop()) {
         stats.instsCommitted[tid]++;
+        if (cpu->inRunahead(tid)) {
+            stats.instsPseudoretired[tid]++;
+            cpu->instsPseudoretired++;
+
+            if (inst->isPoisoned())
+                ++stats.commitPoisonedInsts;
+        }
+    }
     stats.opsCommitted[tid]++;
 
     // To match the old model, don't count nops and instruction

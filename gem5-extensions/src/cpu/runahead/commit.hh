@@ -506,6 +506,15 @@ class Commit
 
         /** Number of cycles where the commit bandwidth limit is reached. */
         statistics::Scalar commitEligibleSamples;
+
+        /** Amount of loads that made it to the head of the ROB during commit */
+        statistics::Scalar loadsAtROBHead;
+        /** Amount of long-latency loads that made it to the head of the ROB during commit */
+        statistics::Scalar lllAtROBHead;
+        /** Total number of instructions committed during runahead */
+        statistics::Vector instsPseudoretired;
+        /** Total number of poisoned instructions retired by commit */
+        statistics::Scalar commitPoisonedInsts;
     } stats;
 };
 

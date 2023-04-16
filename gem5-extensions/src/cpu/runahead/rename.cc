@@ -558,16 +558,6 @@ Rename::renameInsts(ThreadID tid)
 
         blockThisCycle = true;
 
-        // ROB full, check if the staller is a load instruction
-        // TODO: move the LLL check to commit? we can check if there are no insts to commit and if the ROB is full
-        if (source == ROB) {
-            bool lllBlocker = checkROBStallerIsLLL(tid);
-            if (lllBlocker) {
-                DPRINTF(RunaheadRename, "[tid:%i] Rename blocked by LLL in ROB.\n", tid);
-                cpu->enterRunahead(tid);
-            }
-        }
-
         block(tid);
 
         incrFullStat(source);
@@ -771,48 +761,6 @@ Rename::renameInsts(ThreadID tid)
         block(tid);
         toDecode->renameUnblock[tid] = false;
     }
-}
-
-bool
-Rename::checkROBStallerIsLLL(ThreadID tid)
-{
-    const DynInstPtr &head = rob->readHeadInst(tid);
-
-    // Not a load
-    if (!head->isLoad()) {
-        return false;
-    }
-
-    // Can't track if this a LLL yet
-    if(!head->hasRequest()) {
-        return false;
-    }
-
-    gem5::runahead::LSQ::LSQRequest *lsqRequest = head->savedRequest;
-    if (lsqRequest == nullptr) {
-        return false;
-    }
-
-    if(!lsqRequest->isComplete()) {
-        DPRINTF(RunaheadRename, "[tid:%i] ROB is blocked by in-flight load instruction (PC %s). "
-                             "Associated requests:\n", tid, head->pcState());
-
-        for (int idx = 0; idx < lsqRequest->_reqs.size(); idx++) {
-            RequestPtr request = lsqRequest->req(idx);
-            int depth = request->getAccessDepth();
-
-            DPRINTF(RunaheadRename,
-                "[tid:%i] Request #%d hit at depth %d\n",
-                tid, idx+1, depth);
-
-            if (depth >= lllDepthThreshold) {
-                ++stats.lllBlocks;
-                return true;
-            }
-        }
-    }
-
-    return false;
 }
 
 void

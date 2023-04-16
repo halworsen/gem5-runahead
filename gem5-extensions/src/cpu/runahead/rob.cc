@@ -194,6 +194,14 @@ ROB::countInsts(ThreadID tid)
 }
 
 void
+ROB::startRunahead(ThreadID tid)
+{
+    for (DynInstPtr inst : instList[tid]) {
+        inst->setRunahead();
+    }
+}
+
+void
 ROB::insertInst(const DynInstPtr &inst)
 {
     assert(inst);

@@ -168,7 +168,6 @@ class DynInst : public ExecContext, public RefCounted
                                  /// instructions ahead of it
         SerializeAfter,          /// Needs to serialize instructions behind it
         SerializeHandled,        /// Serialization has been handled
-        Poisoned,                /// Instruction produces invalid results
         NumStatus
     };
 
@@ -188,7 +187,9 @@ class DynInst : public ExecContext, public RefCounted
         ReqMade,
         MemOpDone,
         HtmFromTransaction,
-        MaxFlags
+        Poisoned,
+        Runahead,
+        MaxFlags,
     };
 
   private:
@@ -846,10 +847,16 @@ class DynInst : public ExecContext, public RefCounted
     bool isPinnedRegsRenamed() const { return status[PinnedRegsRenamed]; }
 
     /** Marks this instruction as poisoned */
-    void setPoisoned() { status.set(Poisoned); }
+    void setPoisoned() { instFlags.set(Poisoned); }
 
     /** Returns whether or not this instruction is poisoned */
-    bool isPoisoned() const { return status[Poisoned]; }
+    bool isPoisoned() const { return instFlags[Poisoned]; }
+
+    /** Marks this instruction as a runahead instruction */
+    void setRunahead() { instFlags.set(Runahead); }
+
+    /** Returns whether or not this instruction is a runahead instruction */
+    bool isRunahead() const { return instFlags[Runahead]; }
 
     /** Sets the destination registers as renamed */
     void
