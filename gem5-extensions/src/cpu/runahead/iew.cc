@@ -56,6 +56,7 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/IEW.hh"
+#include "debug/RunaheadIEW.hh"
 #include "debug/O3PipeView.hh"
 #include "params/BaseRunaheadCPU.hh"
 
@@ -467,6 +468,7 @@ IEW::squashDueToBranch(const DynInstPtr& inst, ThreadID tid)
         inst->staticInst->advancePC(*toCommit->pc[tid]);
 
         toCommit->mispredictInst[tid] = inst;
+        toCommit->runaheadInst[tid] = NULL;
         toCommit->includeSquashInst[tid] = false;
 
         wroteToTimeBuffer = true;
@@ -492,12 +494,34 @@ IEW::squashDueToMemOrder(const DynInstPtr& inst, ThreadID tid)
         toCommit->squashedSeqNum[tid] = inst->seqNum;
         set(toCommit->pc[tid], inst->pcState());
         toCommit->mispredictInst[tid] = NULL;
+        toCommit->runaheadInst[tid] = NULL;
 
         // Must include the memory violator in the squash.
         toCommit->includeSquashInst[tid] = true;
 
         wroteToTimeBuffer = true;
     }
+}
+
+void
+IEW::squashDueToRunahead(const DynInstPtr& inst, ThreadID tid)
+{
+    DPRINTF(RunaheadIEW, "[tid:%i] [sn:%llu] Runahead exited, squashing from a specific instruction,"
+            " PC: %s "
+            "\n", tid, inst->seqNum, inst->pcState());
+
+    // This is functionally similar to a memory order violation squash
+    if (!toCommit->squash[tid] || inst->seqNum <= toCommit->squashedSeqNum[tid]) {
+        toCommit->squash[tid] = true;
+        toCommit->squashedSeqNum[tid] = inst->seqNum;
+        toCommit->includeSquashInst[tid] = true;
+        set(toCommit->pc[tid], inst->pcState());
+        toCommit->mispredictInst[tid] = NULL;
+        toCommit->runaheadInst[tid] = inst;
+
+        wroteToTimeBuffer = true;
+    }
+
 }
 
 void

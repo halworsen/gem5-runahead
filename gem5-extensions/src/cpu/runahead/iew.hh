@@ -236,6 +236,9 @@ class IEW
         ldstQueue.setLastRetiredHtmUid(tid, htmUid);
     }
 
+    /** Inform commit of a squash caused by exiting runahead */
+    void squashDueToRunahead(const DynInstPtr &inst, ThreadID tid);
+
   private:
     /** Sends commit proper information for a squash due to a branch
      * mispredict.

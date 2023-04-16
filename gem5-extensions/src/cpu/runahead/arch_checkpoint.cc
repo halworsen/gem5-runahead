@@ -123,7 +123,34 @@ ArchCheckpoint::fullSave(ThreadID tid)
 void
 ArchCheckpoint::restore(ThreadID tid)
 {
+    BaseISA *isa = cpu->getContext(tid)->getIsaPtr();
+    const BaseISA::RegClasses &regClasses = isa->regClasses();
 
+    RegIndex flatIdx = 0;
+    for (int regTypeIdx = 0; regTypeIdx <= RegClassType::MiscRegClass; regTypeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(regTypeIdx);
+        const RegClass &cls = regClasses.at(regType);
+
+        // unsupported
+        if (regType == VecRegClass || regType == VecPredRegClass) {
+            continue;
+        }
+
+        for (RegIndex idx = 0; idx < cls.numRegs(); idx++) {
+            RegId reg(regType, idx);
+            PhysRegId checkpointPhysReg(regType, idx, flatIdx++);
+            
+            if (regType == MiscRegClass) {
+                // x86 specific: it has invalid misc registers
+                if (!TheISA::misc_reg::isValid(idx)) {
+                    continue;
+                }
+                cpu->setMiscReg(idx, miscRegValues[idx], tid);
+            } else {
+                cpu->setArchReg(reg, regFile.getReg(&checkpointPhysReg), tid);
+            }
+        }
+    }
 }
 
 void

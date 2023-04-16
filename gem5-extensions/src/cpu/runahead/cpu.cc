@@ -1491,11 +1491,18 @@ CPU::exitRunahead(ThreadID tid)
     DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead. Instructions pseudoretired: %i\n",
                          tid, instsPseudoretired);
 
+    // Restore architectural registers
+    //archStateCheckpoint.restore(tid);
     // Clear all register poison
     regFile.clearPoison();
 
-    // DEBUG
-    scheduleInstStop(tid, 0, "runahead experiment ended");
+    // Then squash every instruction after the LLL that caused runahead
+    const DynInstPtr squashInst = runaheadCause[tid];
+    DPRINTF(RunaheadCPU, "[tid:%i] Restoring state, squashing to [sn:%llu], PC %s.\n",
+                         tid, squashInst->seqNum, squashInst->pcState());
+    iew.squashDueToRunahead(squashInst, tid);
+
+    inRunahead(tid, false);
 }
 
 bool

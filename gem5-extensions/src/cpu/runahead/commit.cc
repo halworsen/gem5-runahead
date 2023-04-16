@@ -850,6 +850,13 @@ Commit::commit()
                     tid,
                     fromIEW->mispredictInst[tid]->pcState().instAddr(),
                     fromIEW->squashedSeqNum[tid]);
+            } else if (fromIEW->runaheadInst[tid]) {
+                DPRINTF(Commit,
+                    "[tid:%i] Squashing due to runahead exit "
+                    "PC:%#x [sn:%llu]\n",
+                    tid,
+                    fromIEW->runaheadInst[tid]->pcState().instAddr(),
+                    fromIEW->squashedSeqNum[tid]);
             } else {
                 DPRINTF(Commit,
                     "[tid:%i] Squashing due to order violation [sn:%llu]\n",
