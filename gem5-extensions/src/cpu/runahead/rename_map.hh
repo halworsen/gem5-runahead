@@ -156,6 +156,9 @@ class SimpleRenameMap
     const_iterator end() const { return map.end(); }
     const_iterator cend() const { return map.cend(); }
     /** @} */
+
+    /** Print the rename map */
+    void dump();
 };
 
 /**
@@ -287,6 +290,9 @@ class UnifiedRenameMap
      * Return whether there are enough registers to serve the request.
      */
     bool canRename(DynInstPtr inst) const;
+
+    /** Print the entire rename map */
+    void dump();
 };
 
 } // namespace runahead

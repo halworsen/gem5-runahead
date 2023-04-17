@@ -104,6 +104,16 @@ SimpleRenameMap::rename(const RegId& arch_reg)
     return RenameInfo(renamed_reg, prev_reg);
 }
 
+void
+SimpleRenameMap::dump()
+{
+    for (int archIdx = 0; archIdx < map.size(); archIdx++) {
+        cprintf("%i -> %i, ", archIdx, map[archIdx]->index());
+        if (!(archIdx % 10))
+            cprintf("\n");
+    }
+    cprintf("\n");
+}
 
 /**** UnifiedRenameMap methods ****/
 
@@ -127,6 +137,16 @@ UnifiedRenameMap::canRename(DynInstPtr inst) const
         }
     }
     return true;
+}
+
+void
+UnifiedRenameMap::dump()
+{
+    for (int typeIdx = 0; typeIdx < renameMaps.size(); typeIdx++) {
+        RegId dummyReg((RegClassType)typeIdx, 0);
+        cprintf("Rename map for reg type %s (arch -> phys):\n", dummyReg.className());
+        renameMaps[typeIdx].dump();
+    }
 }
 
 } // namespace runahead
