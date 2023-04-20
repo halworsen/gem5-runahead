@@ -323,6 +323,9 @@ class ROB
     /** Dummy instruction returned if there are no insts left. */
     DynInstPtr dummyInst;
 
+    /** Dump all instructions currently in the ROB */
+    void dump(ThreadID tid);
+
   private:
     /** The sequence number of the squashed instruction. */
     InstSeqNum squashedSeqNum[MaxThreads];

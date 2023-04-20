@@ -550,5 +550,16 @@ ROB::findInst(ThreadID tid, InstSeqNum squash_inst)
     return NULL;
 }
 
+void
+ROB::dump(ThreadID tid)
+{
+    for (InstIt it = instList[tid].begin(); it != instList[tid].end(); it++) {
+        DynInstPtr inst = *it;
+        cprintf("[sn:%llu] (PC %s) : %s\n",
+                inst->seqNum, inst->pcState(),
+                inst->staticInst->disassemble(inst->pcState().instAddr()));
+    }
+}
+
 } // namespace runahead
 } // namespace gem5

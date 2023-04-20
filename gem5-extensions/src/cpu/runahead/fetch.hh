@@ -154,7 +154,7 @@ class Fetch
         {
             return "CPU FetchFinishTranslation";
         }
-      };
+    };
 
   public:
     /** Overall fetch status. Used to determine if the CPU can
