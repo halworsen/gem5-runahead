@@ -317,10 +317,10 @@ Commit::setActiveThreads(std::list<ThreadID> *at_ptr)
 }
 
 void
-Commit::setRenameMap(UnifiedRenameMap rm_ptr[])
+Commit::setRenameMap(UnifiedRenameMap *rm_ptr[])
 {
     for (ThreadID tid = 0; tid < numThreads; tid++)
-        renameMap[tid] = &rm_ptr[tid];
+        renameMap[tid] = rm_ptr[tid];
 }
 
 void Commit::setROB(ROB *rob_ptr) { rob = rob_ptr; }
@@ -664,7 +664,14 @@ Commit::tick()
         if (commitStatus[tid] == ROBSquashing) {
 
             if (rob->isDoneSquashing(tid)) {
+                DPRINTF(Commit, "[tid:%i] ROB done squashing, switching to running.\n", tid);
                 commitStatus[tid] = Running;
+
+                // The squash was caused by a runahead exit.
+                // We should ask the CPU to restore its state now.
+                if (cpu->isArchSquashPending(tid)) {
+                    cpu->restoreCheckpointState(tid);
+                }
             } else {
                 DPRINTF(Commit,"[tid:%i] Still Squashing, cannot commit any"
                         " insts this cycle.\n", tid);
@@ -707,7 +714,6 @@ Commit::tick()
                     tid, headInst->seqNum, headInst->pcState());
         }
     }
-
 
     if (wroteToTimeBuffer) {
         DPRINTF(Activity, "Activity This Cycle.\n");
@@ -1377,13 +1383,14 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
         // Mark all destination registers as poisoned if the instruction was poisoned
         if (head_inst->isPoisoned()) {
-            assert(cpu->inRunahead(tid));
+            // This can only occur when the CPU is in runahead or when an arch squash is imminent
+            assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
             cpu->regPoisoned(head_inst->renamedDestIdx(i), true);
         }
     }
 
     // Incremental update of arch checkpoint
-    if (!head_inst->isRunahead()) {
+    if (!head_inst->isRunahead() && !cpu->isArchSquashPending(tid)) {
         cpu->updateArchCheckpoint(tid, head_inst);
     }
 

@@ -79,7 +79,6 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
                 false, Event::CPU_Tick_Pri),
       threadExitEvent([this]{ exitThreads(); }, "RunaheadCPU exit threads",
                 false, Event::CPU_Exit_Pri),
-      archStateCheckpoint(this, params),
       lllDepthThreshold(params.lllDepthThreshold),
 #ifndef NDEBUG
       instcount(0),
@@ -98,13 +97,11 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
               params.numPhysCCRegs,
               params.isa[0]->regClasses()),
 
-      freeList(name() + ".freelist", &regFile),
-
       rob(this, params),
 
-      scoreboard(name() + ".scoreboard", regFile.totalNumPhysRegs()),
-
       isa(numThreads, NULL),
+
+      archStateCheckpoint(this, params),
 
       timeBuffer(params.backComSize, params.forwardComSize),
       fetchQueue(params.backComSize, params.forwardComSize),
@@ -126,6 +123,11 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
     fatal_if(!FullSystem && params.numThreads < params.workload.size(),
             "More workload items (%d) than threads (%d) on CPU %s.",
             params.workload.size(), params.numThreads, name());
+
+    // hack: instead of updating some of the CPU's structures, we copy them over if
+    // we need to change them. this makes things easy, but means its memory must be managed by hand
+    freeList = new UnifiedFreeList(name() + ".freelist", &regFile);
+    scoreboard = new Scoreboard(name() + ".scoreboard", regFile.totalNumPhysRegs());
 
     if (!params.switched_out) {
         _status = Running;
@@ -215,14 +217,19 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
             "Non-zero number of physical CC regs specified, even though\n"
             "    ISA does not use them.");
 
-    rename.setScoreboard(&scoreboard);
-    iew.setScoreboard(&scoreboard);
+    rename.setScoreboard(scoreboard);
+    iew.setScoreboard(scoreboard);
 
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         isa[tid] = dynamic_cast<TheISA::ISA *>(params.isa[tid]);
-        commitRenameMap[tid].init(regClasses, &regFile, &freeList);
-        renameMap[tid].init(regClasses, &regFile, &freeList);
+
+        // hack: see the free list instantiation above. same thing here.
+        commitRenameMap[tid] = new UnifiedRenameMap();
+        commitRenameMap[tid]->init(regClasses, &regFile, freeList);
+
+        renameMap[tid] = new UnifiedRenameMap();
+        renameMap[tid]->init(regClasses, &regFile, freeList);
     }
 
     // Initialize rename map to assign physical registers to the
@@ -235,16 +242,16 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
                 // Note that we can't use the rename() method because we don't
                 // want special treatment for the zero register at this point
                 RegId rid = RegId(type, ridx);
-                PhysRegIdPtr phys_reg = freeList.getReg(type);
-                renameMap[tid].setEntry(rid, phys_reg);
-                commitRenameMap[tid].setEntry(rid, phys_reg);
+                PhysRegIdPtr phys_reg = freeList->getReg(type);
+                renameMap[tid]->setEntry(rid, phys_reg);
+                commitRenameMap[tid]->setEntry(rid, phys_reg);
             }
         }
     }
 
     rename.setRenameMap(renameMap);
     commit.setRenameMap(commitRenameMap);
-    rename.setFreeList(&freeList);
+    rename.setFreeList(freeList);
 
     // Setup the ROB for whichever stages need it.
     commit.setROB(&rob);
@@ -303,6 +310,16 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
     if (!params.switched_out && interrupts.empty()) {
         fatal("RunaheadCPU %s has no interrupt controller.\n"
               "Ensure createInterruptController() is called.\n", name());
+    }
+}
+
+CPU::~CPU()
+{
+    delete freeList;
+    delete scoreboard;
+    for (ThreadID tid = 0; tid < numThreads; tid++) {
+        delete renameMap[tid];
+        delete commitRenameMap[tid];
     }
 }
 
@@ -765,9 +782,9 @@ CPU::insertThread(ThreadID tid)
     for (auto type = (RegClassType)0; type <= CCRegClass;
             type = (RegClassType)(type + 1)) {
         for (RegIndex idx = 0; idx < regClasses.at(type).numRegs(); idx++) {
-            PhysRegIdPtr phys_reg = freeList.getReg(type);
-            renameMap[tid].setEntry(RegId(type, idx), phys_reg);
-            scoreboard.setReg(phys_reg);
+            PhysRegIdPtr phys_reg = freeList->getReg(type);
+            renameMap[tid]->setEntry(RegId(type, idx), phys_reg);
+            scoreboard->setReg(phys_reg);
         }
     }
 
@@ -1025,6 +1042,8 @@ CPU::drainResume()
             DPRINTF(Drain, "Activating thread: %i\n", i);
             activateThread(i);
             _status = Running;
+            // if (archSquashPending[i])
+            //     restoreCheckpointState(i);
         }
     }
 
@@ -1229,36 +1248,88 @@ CPU::setReg(PhysRegIdPtr phys_reg, const void *val)
 RegVal
 CPU::getArchReg(const RegId &reg, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
     return regFile.getReg(phys_reg);
 }
 
 void
 CPU::getArchReg(const RegId &reg, void *val, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
     regFile.getReg(phys_reg, val);
 }
 
 void *
 CPU::getWritableArchReg(const RegId &reg, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
     return regFile.getWritableReg(phys_reg);
 }
 
 void
 CPU::setArchReg(const RegId &reg, RegVal val, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
     regFile.setReg(phys_reg, val);
 }
 
 void
 CPU::setArchReg(const RegId &reg, const void *val, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
     regFile.setReg(phys_reg, val);
+}
+
+void
+CPU::copyFreeList(UnifiedFreeList newFreeList)
+{
+    // Delete the old free list
+    delete freeList;
+    // Copy the new one
+    freeList = new UnifiedFreeList(newFreeList);
+
+    // Repair pointers
+    rename.setFreeList(freeList);
+    for (ThreadID tid = 0; tid < numThreads; tid++) {
+        renameMap[tid]->setFreeList(freeList);
+        commitRenameMap[tid]->setFreeList(freeList);
+    }
+}
+
+void
+CPU::copyScoreboard(Scoreboard newScoreboard)
+{
+    delete scoreboard;
+    scoreboard = new Scoreboard(newScoreboard);
+
+    rename.setScoreboard(scoreboard);
+    iew.setScoreboard(scoreboard);
+}
+
+void
+CPU::copyRenameMap(ThreadID tid, UnifiedRenameMap newRenameMap)
+{
+    delete renameMap[tid];
+    renameMap[tid] = new UnifiedRenameMap(newRenameMap);
+
+    rename.setRenameMap(renameMap);
+    for (ThreadID tid = 0; tid < numThreads; tid++) {
+        renameMap[tid]->setFreeList(freeList);
+        commitRenameMap[tid]->setFreeList(freeList);
+    }
+}
+
+void
+CPU::copyCommitRenameMap(ThreadID tid, UnifiedRenameMap newCommitRenameMap)
+{
+    delete commitRenameMap[tid];
+    commitRenameMap[tid] = new UnifiedRenameMap(newCommitRenameMap);
+
+    commit.setRenameMap(commitRenameMap);
+    for (ThreadID tid = 0; tid < numThreads; tid++) {
+        renameMap[tid]->setFreeList(freeList);
+        commitRenameMap[tid]->setFreeList(freeList);
+    }
 }
 
 const PCStateBase &
@@ -1465,6 +1536,8 @@ CPU::enterRunahead(ThreadID tid)
         return;
     }
 
+    inRunahead(tid, true);
+
     const DynInstPtr &robHead = rob.readHeadInst(tid);
     assert(robHead->isLoad());
 
@@ -1480,7 +1553,6 @@ CPU::enterRunahead(ThreadID tid)
     // This will also take care of the ROB head, which is why we only manually set poison above
     rob.startRunahead(tid);
 
-    inRunahead(tid, true);
     instsPseudoretired = 0;
     cpuStats.runaheadPeriods++;
 }
@@ -1490,19 +1562,31 @@ CPU::exitRunahead(ThreadID tid)
 {
     DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead. Instructions pseudoretired: %i\n",
                          tid, instsPseudoretired);
+    inRunahead(tid, false);
+
+    // Squash every instruction after the LLL that caused runahead
+    const DynInstPtr squashInst = runaheadCause[tid];
+    DPRINTF(RunaheadCPU, "[tid:%i] Restoring state, squashing to and including [sn:%llu], PC %s.\n",
+                         tid, squashInst->seqNum, squashInst->pcState());
+
+    // When the squash finished, commit will inform the CPU to restore the architectural state.
+    iew.squashDueToRunahead(squashInst, tid);
+    //drain();
+    // Signal that the CPU is pending an architectural state checkpoint restore once squash is done
+    archSquashPending[tid] = true;
+}
+
+void
+CPU::restoreCheckpointState(ThreadID tid)
+{
+    DPRINTF(RunaheadCPU, "[tid:%i] Restoring architectural state after runahead squash.\n", tid);
 
     // Restore architectural registers
-    //archStateCheckpoint.restore(tid);
+    archStateCheckpoint.restore(tid);
     // Clear all register poison
     regFile.clearPoison();
 
-    // Then squash every instruction after the LLL that caused runahead
-    const DynInstPtr squashInst = runaheadCause[tid];
-    DPRINTF(RunaheadCPU, "[tid:%i] Restoring state, squashing to [sn:%llu], PC %s.\n",
-                         tid, squashInst->seqNum, squashInst->pcState());
-    iew.squashDueToRunahead(squashInst, tid);
-
-    inRunahead(tid, false);
+    archSquashPending[tid] = false;
 }
 
 bool
@@ -1524,26 +1608,6 @@ CPU::updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst)
     assert(!inRunahead(tid));
     DPRINTF(RunaheadCheckpoint, "[tid:%i] [sn:%llu] Update arch checkpoint to PC %s\n",
                                 tid, inst->seqNum, inst->pcState());
-
-    // big heap of debug stuff
-    // DPRINTF(RunaheadCPU, "[tid:%i] instruction disassembly:\n%s\n", tid, inst->staticInst->disassemble(inst->pcState().instAddr()));
-    // // commited state
-    // DPRINTF(RunaheadCPU, "[tid:%i] inst had %i src regs, %i dest regs\n", tid, inst->numSrcRegs(), inst->numDestRegs());
-    // for (int i = 0; i < inst->numSrcRegs(); i++) {
-    //     const RegId &srcReg = inst->srcRegIdx(i);
-    //     PhysRegIdPtr renamedSrcReg = inst->renamedSrcIdx(i);
-    //     DPRINTF(RunaheadCPU, "[tid:%i] src reg %i (%s): r%i (renamed %i, flat %i)\n",
-    //         tid, i, srcReg.className(), srcReg.index(), renamedSrcReg->index(), renamedSrcReg->flatIndex());
-    // }
-    // for (int i = 0; i < inst->numDestRegs(); i++) {
-    //     const RegId &destReg = inst->destRegIdx(i);
-    //     PhysRegIdPtr renamedDestReg = inst->renamedDestIdx(i);
-    //     const RegId &flattenedDestReg = inst->flattenedDestIdx(i);
-    //     DPRINTF(RunaheadCPU, "[tid:%i] dest reg %i (%s): r%i (renamed %i, renamed flat %i, flat %i)\n",
-    //         tid, i, destReg.className(), destReg.index(), renamedDestReg->index(), renamedDestReg->flatIndex(), flattenedDestReg.index());
-    // }
-
-    archStateCheckpoint.setPC(tid, inst->pcState().instAddr());
 
     for (int i = 0; i < inst->numDestRegs(); i++) {
         archStateCheckpoint.updateReg(tid, inst->flattenedDestIdx(i));

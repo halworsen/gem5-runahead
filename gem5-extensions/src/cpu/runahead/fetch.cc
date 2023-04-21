@@ -1066,10 +1066,13 @@ Fetch::buildInst(ThreadID tid, StaticInstPtr staticInst,
             instruction->staticInst->disassemble(this_pc.instAddr()));
 
     if (cpu->inRunahead(tid)) {
-        DPRINTF(RunaheadFetch, "[tid:%i] Instruction (PC %s) was fetched in runahead.\n",
-                tid, this_pc);
+        DPRINTF(RunaheadFetch, "[tid:%i] Instruction [sn:%llu] (PC %s) was fetched in runahead.\n",
+                tid, instruction->seqNum, this_pc);
         instruction->setRunahead();
     }
+
+    assert((!cpu->inRunahead(tid) && !instruction->isRunahead())
+           || (cpu->inRunahead(tid) && instruction->isRunahead()));
 
 #if TRACING_ON
     if (trace) {

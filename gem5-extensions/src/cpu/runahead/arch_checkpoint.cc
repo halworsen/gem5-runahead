@@ -18,17 +18,34 @@ ArchCheckpoint::ArchCheckpoint(CPU *cpu, const BaseRunaheadCPUParams &params) :
             params.isa[0]->regClasses().at(VecPredRegClass).numRegs(),
             params.isa[0]->regClasses().at(CCRegClass).numRegs(),
             params.isa[0]->regClasses()),
-    miscRegValues(params.isa[0]->regClasses().at(MiscRegClass).numRegs())
+    // Note: This references the CPU's regfile as it's a hardcoded map to copy in on restore
+    freeList(name() + ".freelist", &cpu->regFile),
+    scoreboard(name() + ".freelist", cpu->regFile.totalNumPhysRegs()),
+    miscRegs(params.isa[0]->regClasses().at(MiscRegClass).numRegs())
 {
     fatal_if(params.numThreads > 1, "Architectural state checkpointing is not supported with SMT\n");
+
+    const BaseISA::RegClasses &regClasses = params.isa[0]->regClasses();
 
     // setup the list of starting flat indices for all register types
     typeFlatIndices[IntRegClass] = 0;
     for (int regTypeIdx = 1; regTypeIdx <= RegClassType::CCRegClass; regTypeIdx++) {
         RegClassType regType = static_cast<RegClassType>(regTypeIdx);
         RegClassType prevRegType = (RegClassType)(regType - 1);
-        size_t prevRegTypeNumRegs = params.isa[0]->regClasses().at(prevRegType).numRegs();
+        size_t prevRegTypeNumRegs = regClasses.at(prevRegType).numRegs();
         typeFlatIndices[regType] = typeFlatIndices[prevRegType] + prevRegTypeNumRegs;
+    }
+
+    // setup the checkpoint rename map. this should never change
+    // note that, same as with the free list, this must init with the CPU regfile
+    renameMap.init(regClasses, &cpu->regFile, &freeList);
+    for (int regTypeIdx = 0; regTypeIdx <= RegClassType::CCRegClass; regTypeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(regTypeIdx);
+        for (RegIndex idx = 0; idx < regClasses.at(regType).numRegs(); idx++) {
+            RegId regId = RegId(regType, idx);
+            PhysRegIdPtr phys_reg = freeList.getReg(regType);
+            renameMap.setEntry(regId, phys_reg);
+        }
     }
 }
 
@@ -36,9 +53,6 @@ void
 ArchCheckpoint::fullSave(ThreadID tid)
 {
     assert(!cpu->inRunahead(tid));
-
-    checkpointPc = cpu->pcState(tid).instAddr();
-    DPRINTF(RunaheadCheckpoint, "[tid:%i] Saving architectural state at PC: %#x\n", tid, checkpointPc);
 
     BaseISA *isa = cpu->getContext(tid)->getIsaPtr();
     const BaseISA::RegClasses &regClasses = isa->regClasses();
@@ -109,11 +123,11 @@ ArchCheckpoint::fullSave(ThreadID tid)
 
                         RegVal archVal = cpu->readMiscReg(idx, tid);
                         DPRINTF(RunaheadCheckpoint, "[tid:%i] misc reg: %s = %lld\n", tid, cls.regName(reg), archVal);
-                        miscRegValues[idx] = archVal;
+                        miscRegs[idx] = archVal;
                     }
                     break;
                 default:
-                    DPRINTF(RunaheadCheckpoint, "[tid:%i] unknown/ignored regtype %i [%i], not checkpointing\n", tid, regType, idx);
+                    DPRINTF(RunaheadCheckpoint, "[tid:%i] unknown/unsupported regtype %i [%i], not checkpointing\n", tid, regType, idx);
                     break;
             }
         }
@@ -126,6 +140,16 @@ ArchCheckpoint::restore(ThreadID tid)
     BaseISA *isa = cpu->getContext(tid)->getIsaPtr();
     const BaseISA::RegClasses &regClasses = isa->regClasses();
 
+    // Copy over the rename map to both the rename stage map and the commit map
+    cpu->copyRenameMap(tid, renameMap);
+    cpu->copyCommitRenameMap(tid, renameMap);
+
+    // Copy the hardcoded free list to the CPU's free list
+    cpu->copyFreeList(freeList);
+    // And the scoreboard
+    cpu->copyScoreboard(scoreboard);
+
+    // Then copy the architectural register values into the physical regs specified by the rename map
     RegIndex flatIdx = 0;
     for (int regTypeIdx = 0; regTypeIdx <= RegClassType::MiscRegClass; regTypeIdx++) {
         RegClassType regType = static_cast<RegClassType>(regTypeIdx);
@@ -138,25 +162,36 @@ ArchCheckpoint::restore(ThreadID tid)
 
         for (RegIndex idx = 0; idx < cls.numRegs(); idx++) {
             RegId reg(regType, idx);
-            PhysRegId checkpointPhysReg(regType, idx, flatIdx++);
-            
+            PhysRegIdPtr checkpointPhysReg = renameMap.lookup(reg);
+
             if (regType == MiscRegClass) {
                 // x86 specific: it has invalid misc registers
                 if (!TheISA::misc_reg::isValid(idx)) {
                     continue;
                 }
-                cpu->setMiscReg(idx, miscRegValues[idx], tid);
+
+                RegVal curVal = cpu->readMiscReg(idx, tid);
+                if (curVal != miscRegs[idx] && idx == TheISA::misc_reg::Rflags) {
+                    DPRINTF(RunaheadCheckpoint, "[tid:%i] Restoring misc reg %i to value %llu (was %llu)\n",
+                            tid, idx, miscRegs[idx], curVal);
+                    cpu->setMiscReg(idx, miscRegs[idx], tid);
+                }
             } else {
-                cpu->setArchReg(reg, regFile.getReg(&checkpointPhysReg), tid);
+                RegVal checkpointVal = regFile.getReg(checkpointPhysReg);
+                RegVal curVal = cpu->getArchReg(reg, tid);
+                // Check if the value is actually different.
+                // This is mostly just to reduce the amount of debug prints
+                // Since this is done after the rename map copy it's pretty much just chance if they're the same
+                if (curVal != checkpointVal) {
+                    DPRINTF(RunaheadCheckpoint,
+                        "[tid:%i] Restoring %s arch reg %i (phys %i) to value %llu (was %llu)\n",
+                        tid, reg.className(), reg.index(),
+                        checkpointPhysReg->index(), checkpointVal, curVal);
+                    cpu->setArchReg(reg, checkpointVal, tid);
+                }
             }
         }
     }
-}
-
-void
-ArchCheckpoint::setPC(ThreadID tid, Addr pcAddr)
-{
-    checkpointPc = pcAddr;
 }
 
 void
@@ -177,18 +212,13 @@ ArchCheckpoint::updateReg(ThreadID tid, RegId archReg)
 
     RegVal val;
     if (archReg.classValue() == MiscRegClass) {
-        val = cpu->readMiscReg(archReg.index(), tid);
-        miscRegValues[archReg.index()] = val;
+        RegIndex archIdx = archReg.index();
+        val = cpu->readMiscReg(archIdx, tid);
+        miscRegs[archIdx] = val;
     } else {
-        RegId archRegId(archReg.classValue(), archReg);
-        val = cpu->getArchReg(archRegId, tid);
-
-        PhysRegId physArchRegId(
-            archReg.classValue(),
-            archReg.index(),
-            typeFlatIndices[archReg.classValue()] + archReg.index()
-        );
-        regFile.setReg(&physArchRegId, val);
+        PhysRegIdPtr physReg = renameMap.lookup(archReg);
+        val = cpu->getArchReg(archReg, tid);
+        regFile.setReg(physReg, val);
     }
 }
 

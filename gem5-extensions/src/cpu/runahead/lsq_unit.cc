@@ -96,26 +96,29 @@ LSQUnit::recvTimingResp(PacketPtr pkt)
     LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
     assert(request != nullptr);
     bool ret = true;
-    // Check if the instruction caused runahead
+
+    // Track received responses from runahead loads
     const DynInstPtr &inst = request->instruction();
+    if (inst->isRunahead()) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead load (PC %s) received timing response. "
+                             "Request hit depths:\n",
+                             inst->seqNum, inst->pcState());
+        
+        // RETODO: add stat
+        
+        for (int idx = 0; idx < request->_reqs.size(); idx++) {
+            int depth = request->req(idx)->getAccessDepth();
+            DPRINTF(RunaheadLSQ, "Request #%d hit at depth %d\n", idx+1, depth);
+        }
+    }
+
+    // Check if the instruction that initiated the request caused runahead
     if (cpu->instCausedRunahead(inst)) {
         DPRINTF(RunaheadLSQ, "[tid:%i] Runahead-causing inst [sn:%llu] (PC %s) "
                              "received timing response.\n",
                              inst->threadNumber, inst->seqNum, inst->pcState());
         // If so, we can exit runahead and resume normal execution
         cpu->exitRunahead(inst->threadNumber);
-    }
-
-    // Otherwise track received responses from runahead loads
-    if (inst->isRunahead()) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead load (PC %s) received timing response. "
-                             "Request hit depths: %i\n",
-                             inst->seqNum, inst->pcState(), request->mainReq()->depth);
-        
-        for (int idx = 0; idx < request->_reqs.size(); idx++) {
-            int depth = request->req(idx)->getAccessDepth();
-            DPRINTF(RunaheadLSQ, "Request #%d hit at depth %d\n", idx+1, depth);
-        }
     }
 
     /* Check that the request is still alive before any further action. */
@@ -187,9 +190,24 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
     cpu->ppDataAccessComplete->notify(std::make_pair(inst, pkt));
 
     // If the data access was made by a poisoned long latency load, do nothing
-    if (inst->isPoisoned()) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned inst (PC %s) completed data access, ignoring.\n",
+    if (inst->isLoad() && inst->isPoisoned()) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned load (PC %s) completed data access, ignoring.\n",
                              inst->seqNum, inst->pcState());
+        // RETODO: add stat
+        // ++stats.poisonedLoadsIgnored;
+        return;
+    }
+
+    // RETODO (probably a writeback thing, not completeDataAccess)
+    // If the data access was made by a poisoned store, it cannot be allowed to reach cache
+
+    // If it's a memory op that was initiated during runahead but we've since exited it, do nothing
+    if (inst->isRunahead() && !cpu->inRunahead(inst->threadNumber)) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Stale runahead inst (PC %s) "
+                             "completed data access, ignoring.\n",
+                            inst->seqNum, inst->pcState());
+        // RETODO: add stat
+        // ++stats.staleRunaheadInsts;
         return;
     }
 
@@ -1121,6 +1139,13 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
         ++stats.ignoredResponses;
         return;
     }
+
+    // Runahead sanity checks
+    // If in runahead, the inst must be runahead. If not in runahead, it cannot be runahead
+    assert((cpu->inRunahead(inst->threadNumber) && inst->isRunahead())
+           || (!cpu->inRunahead(inst->threadNumber && !inst->isRunahead())));
+    // In any case, a poisoned load should never writeback
+    assert(!(inst->isLoad() && inst->isPoisoned()));
 
     if (!inst->isExecuted()) {
         inst->setExecuted();

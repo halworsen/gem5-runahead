@@ -293,10 +293,10 @@ Rename::setActiveThreads(std::list<ThreadID> *at_ptr)
 
 
 void
-Rename::setRenameMap(UnifiedRenameMap rm_ptr[])
+Rename::setRenameMap(UnifiedRenameMap *rm_ptr[])
 {
     for (ThreadID tid = 0; tid < numThreads; tid++)
-        renameMap[tid] = &rm_ptr[tid];
+        renameMap[tid] = rm_ptr[tid];
 }
 
 void
@@ -1019,6 +1019,9 @@ Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
     UnifiedRenameMap *map = renameMap[tid];
     unsigned num_src_regs = inst->numSrcRegs();
 
+    DPRINTF(Rename, "[tid:%i] [sn:%llu] Renaming %i source registers.\n",
+            tid, inst->seqNum, num_src_regs);
+
     // Get the architectual register numbers from the source and
     // operands, and redirect them to the right physical register.
     for (int src_idx = 0; src_idx < num_src_regs; src_idx++) {
@@ -1026,6 +1029,13 @@ Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
         PhysRegIdPtr renamed_reg;
 
         renamed_reg = map->lookup(tc->flattenRegId(src_reg));
+        DPRINTF(Rename,
+                "[tid:%i] "
+                "Looking up %s arch reg %i, got phys reg %i (%s)\n",
+                tid, src_reg.className(),
+                src_reg.index(), renamed_reg->index(),
+                renamed_reg->className());
+
         switch (src_reg.classValue()) {
           case InvalidRegClass:
             break;
@@ -1050,13 +1060,6 @@ Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
             panic("Invalid register class: %d.", src_reg.classValue());
         }
 
-        DPRINTF(Rename,
-                "[tid:%i] "
-                "Looking up %s arch reg %i, got phys reg %i (%s)\n",
-                tid, src_reg.className(),
-                src_reg.index(), renamed_reg->index(),
-                renamed_reg->className());
-
         inst->renameSrcReg(src_idx, renamed_reg);
 
         // If in runahead and the instruction sources an invalid register, the instruction becomes poisoned
@@ -1069,16 +1072,16 @@ Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
         if (scoreboard->getReg(renamed_reg)) {
             DPRINTF(Rename,
                     "[tid:%i] "
-                    "Register %d (flat: %d) (%s) is ready.\n",
-                    tid, renamed_reg->index(), renamed_reg->flatIndex(),
+                    "%s register %d (flat: %d) (%s) is ready.\n",
+                    tid, renamed_reg->className(), renamed_reg->index(), renamed_reg->flatIndex(),
                     renamed_reg->className());
 
             inst->markSrcRegReady(src_idx);
         } else {
             DPRINTF(Rename,
                     "[tid:%i] "
-                    "Register %d (flat: %d) (%s) is not ready.\n",
-                    tid, renamed_reg->index(), renamed_reg->flatIndex(),
+                    "%s register %d (flat: %d) (%s) is not ready.\n",
+                    tid, renamed_reg->className(), renamed_reg->index(), renamed_reg->flatIndex(),
                     renamed_reg->className());
         }
 
@@ -1094,6 +1097,8 @@ Rename::renameDestRegs(const DynInstPtr &inst, ThreadID tid)
     unsigned num_dest_regs = inst->numDestRegs();
 
     // Rename the destination registers.
+    DPRINTF(Rename, "[tid:%i] [sn:%llu] Renaming %i destination registers.\n",
+            tid, inst->seqNum, num_dest_regs);
     for (int dest_idx = 0; dest_idx < num_dest_regs; dest_idx++) {
         const RegId& dest_reg = inst->destRegIdx(dest_idx);
         UnifiedRenameMap::RenameInfo rename_result;

@@ -241,6 +241,9 @@ class InstructionQueue
     /** Adds a ready memory instruction to the ready list. */
     void addReadyMemInst(const DynInstPtr &ready_inst);
 
+    /** Reset the dependency graphs for all registers */
+    //void resetDependencyGraph() { dependGraph.reset(); };
+
     /**
      * Reschedules a memory instruction. It will be ready to issue once
      * replayMemInst() is called.
@@ -469,17 +472,6 @@ class InstructionQueue
      */
     int countInsts();
 
-    /** Debugging function to dump all the list sizes, as well as print
-     *  out the list of nonspeculative instructions.  Should not be used
-     *  in any other capacity, but it has no harmful sideaffects.
-     */
-    void dumpLists();
-
-    /** Debugging function to dump out all instructions that are in the
-     *  IQ.
-     */
-    void dumpInsts();
-
     struct IQStats : public statistics::Group
     {
         IQStats(CPU *cpu, const unsigned &total_width);
@@ -544,6 +536,17 @@ class InstructionQueue
     } iqStats;
 
    public:
+    /** Debugging function to dump all the list sizes, as well as print
+     *  out the list of nonspeculative instructions.  Should not be used
+     *  in any other capacity, but it has no harmful sideaffects.
+     */
+    void dumpLists();
+
+    /** Debugging function to dump out all instructions that are in the
+     *  IQ.
+     */
+    void dumpInsts();
+
     struct IQIOStats : public statistics::Group
     {
         IQIOStats(statistics::Group *parent);

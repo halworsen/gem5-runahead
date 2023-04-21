@@ -96,10 +96,10 @@ SimpleRenameMap::rename(const RegId& arch_reg)
             arch_reg.getNumPinnedWrites() + 1);
     }
 
-    DPRINTF(Rename, "Renamed reg %d to physical reg %d (%d) old mapping was"
-            " %d (%d)\n",
-            arch_reg, renamed_reg->flatIndex(), renamed_reg->flatIndex(),
-            prev_reg->flatIndex(), prev_reg->flatIndex());
+    DPRINTF(Rename, "Renamed reg %d to physical reg %d (flat %d) old mapping was"
+            " %d (flat %d)\n",
+            arch_reg, renamed_reg->index(), renamed_reg->flatIndex(),
+            prev_reg->index(), prev_reg->flatIndex());
 
     return RenameInfo(renamed_reg, prev_reg);
 }
@@ -137,6 +137,13 @@ UnifiedRenameMap::canRename(DynInstPtr inst) const
         }
     }
     return true;
+}
+
+void
+UnifiedRenameMap::setFreeList(UnifiedFreeList *freeList)
+{
+    for (int i = 0; i < renameMaps.size(); i++)
+        renameMaps[i].setFreeList(&(freeList->freeLists[i]));
 }
 
 void

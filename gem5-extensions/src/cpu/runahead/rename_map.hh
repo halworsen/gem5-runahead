@@ -143,6 +143,8 @@ class SimpleRenameMap
 
     size_t numArchRegs() const { return map.size(); }
 
+    void setFreeList(SimpleFreeList *_freeList) { freeList = _freeList; };
+
     /** Forward begin/cbegin to the map. */
     /** @{ */
     iterator begin() { return map.begin(); }
@@ -290,6 +292,9 @@ class UnifiedRenameMap
      * Return whether there are enough registers to serve the request.
      */
     bool canRename(DynInstPtr inst) const;
+
+    /** Update the free list associated with the rename map */
+    void setFreeList(UnifiedFreeList *freeList);
 
     /** Print the entire rename map */
     void dump();

@@ -176,7 +176,7 @@ class Rename
     void setActiveThreads(std::list<ThreadID> *at_ptr);
 
     /** Sets pointer to rename maps (per-thread structures). */
-    void setRenameMap(UnifiedRenameMap rm_ptr[MaxThreads]);
+    void setRenameMap(UnifiedRenameMap *rm_ptr[MaxThreads]);
 
     /** Sets pointer to the free list. */
     void setFreeList(UnifiedFreeList *fl_ptr);
@@ -203,6 +203,9 @@ class Rename
 
     /** Debugging function used to dump history buffer of renamings. */
     void dumpHistory();
+
+    /** Clear the history buffer of all renames */
+    void clearHistory(ThreadID tid) { historyBuffer[tid].clear(); };
 
   private:
     /** Reset this pipeline stage */

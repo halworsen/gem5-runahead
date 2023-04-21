@@ -2,6 +2,9 @@
 #define __CPU_RUNAHEAD_ARCH_CHECKPOINT_HH__
 
 #include "cpu/runahead/regfile.hh"
+#include "cpu/runahead/rename_map.hh"
+#include "cpu/runahead/free_list.hh"
+#include "cpu/runahead/scoreboard.hh"
 #include "params/BaseRunaheadCPU.hh"
 
 namespace gem5
@@ -28,17 +31,23 @@ private:
     /** The CPU whose state is checkpointed */
     CPU *cpu;
 
-    /** PC address at which this checkpoint was taken */
-    Addr checkpointPc;
-
     /** Architectural register checkpoint file */
     PhysRegFile regFile;
 
+    /** Hardcoded/predetermined rename maps to use with the checkpointed register file */
+    UnifiedRenameMap renameMap;
+
+    /** Hardcoded/predetermined free reg list */
+    UnifiedFreeList freeList;
+
+    /** Hardcoded/predetermined scoreboard of free registers */
+    Scoreboard scoreboard;
+
     /** Starting flat indices per register type */
-    std::array<uint16_t, CCRegClass + 1> typeFlatIndices;
+    std::array<uint16_t, CCRegClass> typeFlatIndices;
 
     /** Stored misc register values */
-    std::vector<RegVal> miscRegValues;
+    std::vector<RegVal> miscRegs;
 
 public:
     ArchCheckpoint(CPU *cpu, const BaseRunaheadCPUParams &params);
@@ -48,8 +57,6 @@ public:
 
     /** Restore the architectural state of the CPU */
     void restore(ThreadID tid);
-
-    void setPC(ThreadID tid, Addr pcAddr);
 
     /** Update the checkpoint of a single architectural register */
     void updateReg(ThreadID tid, RegId archReg);

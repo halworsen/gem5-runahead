@@ -172,6 +172,8 @@ class CPU : public BaseCPU
   public:
     /** Constructs a CPU with the given parameters. */
     CPU(const BaseRunaheadCPUParams &params);
+    /** Free resources allocated during the CPU's lifespan */
+    ~CPU();
 
     ProbePointArg<PacketPtr> *ppInstAccessComplete;
     ProbePointArg<std::pair<DynInstPtr, PacketPtr> > *ppDataAccessComplete;
@@ -333,6 +335,18 @@ class CPU : public BaseCPU
     void setArchReg(const RegId &reg, RegVal val, ThreadID tid);
     void setArchReg(const RegId &reg, const void *val, ThreadID tid);
 
+    /** Deletes the old free list and copies in a new one */
+    void copyFreeList(UnifiedFreeList newFreeList);
+
+    /** Deletes the old scoreboard and copies in a new one */
+    void copyScoreboard(Scoreboard newScoreboard);
+
+    /** Deletes the old rename map and copies in a new one */
+    void copyRenameMap(ThreadID tid, UnifiedRenameMap newRenameMap);
+
+    /** Deletes the old free list and copies in a new one */
+    void copyCommitRenameMap(ThreadID tid, UnifiedRenameMap newCommitRenameMap);
+
     /** Sets the commit PC state of a specific thread. */
     void pcState(const PCStateBase &new_pc_state, ThreadID tid);
 
@@ -381,8 +395,11 @@ private:
     /** Tracks which threads are in runahead */
     bool runaheadStatus[MaxThreads];
 
-    /** Running architectural state checkpoint */
-    ArchCheckpoint archStateCheckpoint;
+    /**
+     * Whether or not an arch state checkpoint restore is currently pending
+     * This happens after the pipeline is flushed by a runahead exit
+     */
+    bool archSquashPending[MaxThreads];
 
 public:
     /** Enter runahead, starting from the instruction at the head of the ROB */
@@ -391,11 +408,17 @@ public:
     /** Exit runahead, resuming from the instruction that caused us to enter runahead */
     void exitRunahead(ThreadID tid);
 
+    /** Restore the CPU's architectural state to the last checkpoint */
+    void restoreCheckpointState(ThreadID tid);
+
     /** Find whether or not a thread is currently in runahead */
     bool inRunahead(ThreadID tid) { return runaheadStatus[tid]; };
 
     /** Set whether or not a thread is in runahead */
     void inRunahead(ThreadID tid, bool state) { runaheadStatus[tid] = state; };
+
+    /** Is an arch state restore imminent? */
+    bool isArchSquashPending(ThreadID tid) { return archSquashPending[tid]; };
 
     /** Check if the given instruction caused the CPU to enter runahead */
     bool instCausedRunahead(const DynInstPtr &inst);
@@ -461,13 +484,13 @@ public:
     PhysRegFile regFile;
 
     /** The free list. */
-    UnifiedFreeList freeList;
+    UnifiedFreeList *freeList;
 
     /** The rename map. */
-    UnifiedRenameMap renameMap[MaxThreads];
+    UnifiedRenameMap *renameMap[MaxThreads];
 
     /** The commit rename map. */
-    UnifiedRenameMap commitRenameMap[MaxThreads];
+    UnifiedRenameMap *commitRenameMap[MaxThreads];
 
     /** The re-order buffer. */
     ROB rob;
@@ -483,9 +506,13 @@ public:
     std::unordered_map<ThreadID, bool> exitingThreads;
 
     /** Integer Register Scoreboard */
-    Scoreboard scoreboard;
+    Scoreboard *scoreboard;
 
     std::vector<TheISA::ISA *> isa;
+
+  private:
+    /** Running architectural state checkpoint */
+    ArchCheckpoint archStateCheckpoint;
 
   public:
     /** Enum to give each stage a specific index, so when calling
