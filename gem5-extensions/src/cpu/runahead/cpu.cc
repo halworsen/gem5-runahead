@@ -79,6 +79,7 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
                 false, Event::CPU_Tick_Pri),
       threadExitEvent([this]{ exitThreads(); }, "RunaheadCPU exit threads",
                 false, Event::CPU_Exit_Pri),
+      runaheadEnabled(params.enableRunahead),
       lllDepthThreshold(params.lllDepthThreshold),
 #ifndef NDEBUG
       instcount(0),
@@ -1531,6 +1532,9 @@ CPU::dumpInsts()
 void
 CPU::enterRunahead(ThreadID tid)
 {
+    if (!runaheadEnabled)
+        return;
+
     if (inRunahead(tid)) {
         DPRINTF(RunaheadCPU, "[tid:%i] Already in runahead, ignoring.\n", tid);
         return;

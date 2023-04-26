@@ -389,6 +389,9 @@ class CPU : public BaseCPU
     void dumpInsts();
 
 private:
+    /** Whether or not runahead is enabled */
+    bool runaheadEnabled;
+
     /** The instruction that caused us to enter runahead mode */
     DynInstPtr runaheadCause[MaxThreads];
 

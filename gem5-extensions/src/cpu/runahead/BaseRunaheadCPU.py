@@ -162,6 +162,7 @@ class BaseRunaheadCPU(BaseCPU):
                                        "Branch Predictor")
     needsTSO = Param.Bool(False, "Enable TSO Memory model")
 
+    enableRunahead = Param.Bool(True, 'Whether or not to use runahead execution')
 
     # 0 is L1, 1 is L2 and so on
     # This is more of a system/simulation parameter, really, but I'm trying to keep
