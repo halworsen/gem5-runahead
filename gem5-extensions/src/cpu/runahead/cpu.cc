@@ -1596,6 +1596,8 @@ CPU::restoreCheckpointState(ThreadID tid)
     archStateCheckpoint.restore(tid);
     // Clear all register poison
     regFile.clearPoison();
+    // Invalidate Rcache
+    runaheadCache.invalidateCache();
 
     archSquashPending[tid] = false;
 }

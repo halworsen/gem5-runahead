@@ -142,6 +142,7 @@ RunaheadCache::invalidateCache()
     DPRINTF(RCache, "Invalidating (entire) r-cache.\n");
     for (CacheBlock &block : cacheEntries) {
         block.valid = false;
+        block.poisoned = false;
     }
 
     ++rcacheStats.invalidations;
