@@ -323,14 +323,20 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
                "was a (valid) LLL in runahead"),
       ADD_STAT(staleRunaheadInsts, statistics::units::Count::get(),
                "Number of instructions ignored because they were runahead and "
-               "runahead exited before the request finished")
+               "runahead exited before the request finished"),
+      ADD_STAT(forwardedPoisons, statistics::units::Count::get(),
+               "Number of poisoned stores that were forwarded to loads"),
+      ADD_STAT(forwardedRunaheadLoads, statistics::units::Count::get(),
+               "Number of runahead stores that were forwarded to (runahead) loads"),
 {
     loadToUse
         .init(0, 299, 10)
         .flags(statistics::nozero);
-    
+
     runaheadLLLsCompleted.prereq(runaheadLLLsCompleted);
     staleRunaheadInsts.prereq(staleRunaheadInsts);
+    forwardedPoisons.prereq(forwardedPoisons);
+    forwardedRunaheadLoads.prereq(forwardedRunaheadLoads);
 }
 
 void
@@ -1608,12 +1614,20 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
                     assert(request->_numOutstandingPackets > 0);
                     // There are memory requests packets in flight already.
                     // This may happen if the store was not complete the
-                    // first time this load got executed. Signal the senderSate
+                    // first time this load got executed. Signal the senderState
                     // that response packets should be discarded.
                     request->discard();
                 }
 
-                // RETODO: check if store is poisoned, forward that information to dependent loads
+                // Check if the store is poisoned. If so, the poison is forwarded to the load.
+                if (store_it->instruction()->isPoisoned()) {
+                    load_inst->setPoisoned();
+                    ++stats.forwardedPoisons;
+                }
+
+                // In any case, if the forwarding was in runahead, track it
+                if (store_it->instruction()->isRunahead() && load_inst->isRunahead())
+                    ++stats.forwardedRunaheadLoads;
 
                 WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt,
                         this);

@@ -846,6 +846,8 @@ class DynInst : public ExecContext, public RefCounted
     /** Returns whether pinned registers are renamed */
     bool isPinnedRegsRenamed() const { return status[PinnedRegsRenamed]; }
 
+    //Runahead
+    //-----------------------
     /** Marks this instruction as poisoned */
     void setPoisoned() { instFlags.set(Poisoned); }
 

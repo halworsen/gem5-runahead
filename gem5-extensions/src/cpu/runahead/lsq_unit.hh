@@ -546,6 +546,12 @@ class LSQUnit
 
         /** Number of instructions ignored because they were runahead and runahead exited before the request finished */
         statistics::Scalar staleRunaheadInsts;
+
+        /** Number of runahead stores forwarded to (runahead) loads */
+        statistics::Scalar forwardedRunaheadLoads;
+
+        /** Number of poisoned stores that were forwarded to loads */
+        statistics::Scalar forwardedPoisons;
     } stats;
 
   public:
