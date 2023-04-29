@@ -103,13 +103,14 @@ LSQUnit::recvTimingResp(PacketPtr pkt)
         DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead load (PC %s) received timing response. "
                              "Request hit depths:\n",
                              inst->seqNum, inst->pcState());
-        
-        // RETODO: add stat
-        
+
         for (int idx = 0; idx < request->_reqs.size(); idx++) {
             int depth = request->req(idx)->getAccessDepth();
             DPRINTF(RunaheadLSQ, "Request #%d hit at depth %d\n", idx+1, depth);
         }
+
+        if (inst->isLoad())
+            ++stats.runaheadLoadsReceived;
     }
 
     // Check if the instruction that initiated the request caused runahead
@@ -193,6 +194,9 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
     if (inst->isLoad() && inst->isPoisoned()) {
         DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned load (PC %s) completed data access, ignoring.\n",
                              inst->seqNum, inst->pcState());
+        // We know this must have been made by a valid LLL because loads that
+        // are poisoned on arrival do not send any requests to cache. Only LLLs can send
+        // data to cache, after which they become poisoned.
         ++stats.runaheadLLLsCompleted;
         return;
     }
@@ -327,7 +331,7 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
       ADD_STAT(forwardedPoisons, statistics::units::Count::get(),
                "Number of poisoned stores that were forwarded to loads"),
       ADD_STAT(forwardedRunaheadLoads, statistics::units::Count::get(),
-               "Number of runahead stores that were forwarded to (runahead) loads"),
+               "Number of runahead stores that were forwarded to (runahead) loads")
 {
     loadToUse
         .init(0, 299, 10)

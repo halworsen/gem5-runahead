@@ -541,7 +541,11 @@ class LSQUnit
          * is issued and its completion */
         statistics::Distribution loadToUse;
 
-        /** Number of load responses that were ignored because the load was a (valid) LLL in runahead */
+        /** Number of timing responses received tied to runahead loads */
+        statistics::Scalar runaheadLoadsReceived;
+
+        /** Number of load responses that were ignored because
+         * the load was a (valid) LLL in runahead. I.e. how many LLLs were completed in runahead. */
         statistics::Scalar runaheadLLLsCompleted;
 
         /** Number of instructions ignored because they were runahead and runahead exited before the request finished */
