@@ -58,6 +58,7 @@
 #include "cpu/runahead/cpu.hh"
 #include "cpu/runahead/dyn_inst_ptr.hh"
 #include "cpu/runahead/lsq.hh"
+#include "cpu/runahead/runahead_cache.hh"
 #include "cpu/timebuf.hh"
 #include "debug/HtmCpu.hh"
 #include "debug/LSQUnit.hh"
@@ -539,6 +540,12 @@ class LSQUnit
         /** Distribution of cycle latency between the first time a load
          * is issued and its completion */
         statistics::Distribution loadToUse;
+
+        /** Number of load responses that were ignored because the load was a (valid) LLL in runahead */
+        statistics::Scalar runaheadLLLsCompleted;
+
+        /** Number of instructions ignored because they were runahead and runahead exited before the request finished */
+        statistics::Scalar staleRunaheadInsts;
     } stats;
 
   public:
@@ -561,6 +568,7 @@ class LSQUnit
 
     /** Returns whether or not the LSQ unit is stalled. */
     bool isStalled()  { return stalled; }
+
   public:
     typedef typename CircularQueue<LQEntry>::iterator LQIterator;
     typedef typename CircularQueue<SQEntry>::iterator SQIterator;

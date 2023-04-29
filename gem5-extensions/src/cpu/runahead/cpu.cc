@@ -100,6 +100,9 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
 
       rob(this, params),
 
+      // TODO? revisit RE cache block size
+      runaheadCache(this, params.runaheadCacheSize, 8),
+
       isa(numThreads, NULL),
 
       archStateCheckpoint(this, params),
@@ -183,6 +186,10 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
     commit.setIEWStage(&iew);
     rename.setIEWStage(&iew);
     rename.setCommitStage(&commit);
+
+    // Setup the runahead cache for IEW
+    // IEW will passthrough down to the individual LSQ units that need it
+    iew.setRunaheadCache(&runaheadCache);
 
     ThreadID active_threads;
     if (FullSystem) {

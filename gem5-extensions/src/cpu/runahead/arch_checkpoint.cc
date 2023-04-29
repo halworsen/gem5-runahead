@@ -150,7 +150,6 @@ ArchCheckpoint::restore(ThreadID tid)
     cpu->copyScoreboard(scoreboard);
 
     // Then copy the architectural register values into the physical regs specified by the rename map
-    RegIndex flatIdx = 0;
     for (int regTypeIdx = 0; regTypeIdx <= RegClassType::MiscRegClass; regTypeIdx++) {
         RegClassType regType = static_cast<RegClassType>(regTypeIdx);
         const RegClass &cls = regClasses.at(regType);

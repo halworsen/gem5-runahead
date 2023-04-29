@@ -55,6 +55,7 @@
 #include "base/types.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/runahead/dyn_inst_ptr.hh"
+#include "cpu/runahead/runahead_cache.hh"
 #include "cpu/utils.hh"
 #include "enums/SMTQueuePolicy.hh"
 #include "mem/port.hh"
@@ -220,7 +221,11 @@ class LSQ
             WritebackScheduled  = 0x00001000,
             WritebackDone       = 0x00002000,
             /** True if this is an atomic request */
-            IsAtomic            = 0x00004000
+            IsAtomic            = 0x00004000,
+            /** Set if the request was made in runahead */
+            Runahead            = 0x00008000,
+            /** Set if the request contains poisoned data */
+            Poisoned            = 0x00010000,
         };
         FlagsType flags;
 
@@ -557,6 +562,12 @@ class LSQ
             }
         }
 
+        void setRunahead() { flags.set(Flag::Runahead); };
+        bool isRunahead() { return flags.isSet(Flag::Runahead); };
+
+        void setPoisoned() { flags.set(Flag::Poisoned); };
+        bool isPoisoned() { return flags.isSet(Flag::Poisoned); };
+
         void
         complete()
         {
@@ -891,6 +902,12 @@ class LSQ
 
     RequestPort &getDataPort() { return dcachePort; }
 
+    /** Send a packet to runahead cache */
+    bool sendToRunaheadCache(PacketPtr pkt);
+
+    /** Set the runahead cache pointer */
+    void setRunaheadCache(RunaheadCache *cache);
+
   protected:
     /** D-cache is blocked */
     bool _cacheBlocked;
@@ -953,6 +970,9 @@ class LSQ
 
     /** The LSQ units for individual threads. */
     std::vector<LSQUnit> thread;
+
+    /** Runahead cache */
+    RunaheadCache *runaheadCache;
 
     /** Number of Threads. */
     ThreadID numThreads;

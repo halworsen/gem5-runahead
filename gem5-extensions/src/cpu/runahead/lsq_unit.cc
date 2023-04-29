@@ -189,31 +189,29 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
 
     cpu->ppDataAccessComplete->notify(std::make_pair(inst, pkt));
 
-    // If the data access was made by a poisoned long latency load, do nothing
+    // If the data access was made by a poisoned load, do nothing
     if (inst->isLoad() && inst->isPoisoned()) {
         DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned load (PC %s) completed data access, ignoring.\n",
                              inst->seqNum, inst->pcState());
-        // RETODO: add stat
-        // ++stats.poisonedLoadsIgnored;
+        ++stats.runaheadLLLsCompleted;
         return;
     }
 
-    // RETODO (probably a writeback thing, not completeDataAccess)
-    // If the data access was made by a poisoned store, it cannot be allowed to reach cache
-
-    // If it's a memory op that was initiated during runahead but we've since exited it, do nothing
+    // If it's a memory op that was initiated during runahead but we've since exited it, do (almost) nothing
+    // There's some state to clean up, particularly wrt. TSO
+    bool staleRunaheadCompletion = false;
     if (inst->isRunahead() && !cpu->inRunahead(inst->threadNumber)) {
         DPRINTF(RunaheadLSQ, "[sn:%llu] Stale runahead inst (PC %s) "
                              "completed data access, ignoring.\n",
                             inst->seqNum, inst->pcState());
-        // RETODO: add stat
-        // ++stats.staleRunaheadInsts;
-        return;
+        staleRunaheadCompletion = true;
+        ++stats.staleRunaheadInsts;
     }
 
     assert(!cpu->switchedOut());
     if (!inst->isSquashed()) {
-        if (request->needWBToRegister()) {
+        // Stale runahead instructions do not get to writeback
+        if (request->needWBToRegister() && !staleRunaheadCompletion) {
             // Only loads, store conditionals and atomics perform the writeback
             // after receving the response from the memory
             assert(inst->isLoad() || inst->isStoreConditional() ||
@@ -319,11 +317,20 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
                "Number of times an access to memory failed due to the cache "
                "being blocked"),
       ADD_STAT(loadToUse, "Distribution of cycle latency between the "
-                "first time a load is issued and its completion")
+                "first time a load is issued and its completion"),
+      ADD_STAT(runaheadLLLsCompleted, statistics::units::Count::get(),
+               "Number of load responses that were ignored because the load "
+               "was a (valid) LLL in runahead"),
+      ADD_STAT(staleRunaheadInsts, statistics::units::Count::get(),
+               "Number of instructions ignored because they were runahead and "
+               "runahead exited before the request finished")
 {
     loadToUse
         .init(0, 299, 10)
         .flags(statistics::nozero);
+    
+    runaheadLLLsCompleted.prereq(runaheadLLLsCompleted);
+    staleRunaheadInsts.prereq(staleRunaheadInsts);
 }
 
 void
@@ -846,19 +853,28 @@ void
 LSQUnit::writebackStores()
 {
     if (isStoreBlocked) {
+        assert(!cpu->inRunahead(storeWBIt->instruction()->threadNumber));
         DPRINTF(LSQUnit, "Writing back  blocked store\n");
         writebackBlockedStore();
     }
 
-    // RETODO: do not wb to cache in runahead, wb to runahead cache instead
     while (storesToWB > 0 &&
            storeWBIt.dereferenceable() &&
            storeWBIt->valid() &&
            storeWBIt->canWB() &&
-           ((!needsTSO) || (!storeInFlight)) &&
-           lsq->cachePortAvailable(false)) {
+           !(needsTSO && storeInFlight)) {
 
-        if (isStoreBlocked) {
+        DynInstPtr inst = storeWBIt->instruction();
+        LSQRequest* request = storeWBIt->request();
+
+        // Runahead stores don't need to bother with port availability or cache being blocked
+        if (!lsq->cachePortAvailable(false) && !inst->isRunahead()) {
+            storeWBIt++;
+            continue;
+        }
+
+        if (isStoreBlocked && !inst->isRunahead()) {
+            assert(!cpu->inRunahead(inst->threadNumber));
             DPRINTF(LSQUnit, "Unable to write back any more stores, cache"
                     " is blocked!\n");
             break;
@@ -874,16 +890,13 @@ LSQUnit::writebackStores()
             continue;
         }
 
-        if (storeWBIt->instruction()->isDataPrefetch()) {
+        if (inst->isDataPrefetch()) {
             storeWBIt++;
             continue;
         }
 
         assert(storeWBIt->hasRequest());
         assert(!storeWBIt->committed());
-
-        DynInstPtr inst = storeWBIt->instruction();
-        LSQRequest* request = storeWBIt->request();
 
         // Process store conditionals or store release after all previous
         // stores are completed
@@ -895,7 +908,7 @@ LSQUnit::writebackStores()
                 storeWBIt.idx(), inst->pcState(),
                 request->mainReq()->getPaddr(), inst->seqNum,
                 request->mainReq()->isLLSC() ? "SC" : "",
-                request->mainReq()->isRelease() ? "/Release" : "");
+                request->mainReq()->isRelease() ? "Release" : "");
             break;
         }
 
@@ -911,11 +924,18 @@ LSQUnit::writebackStores()
 
         request->buildPackets();
 
-        DPRINTF(LSQUnit, "D-Cache: Writing back store idx:%i PC:%s "
-                "to Addr:%#x, data:%#x [sn:%lli]\n",
-                storeWBIt.idx(), inst->pcState(),
-                request->mainReq()->getPaddr(), (int)*(inst->memData),
-                inst->seqNum);
+        if (inst->isRunahead()) {
+            DPRINTF(RunaheadLSQ, "Writing back runahead store to R-cache [sn:%llu] idx:%i PC:%s "
+                    "to PAddr:%#x, data:%#x\n",
+                    inst->seqNum, storeWBIt.idx(), inst->pcState(),
+                    request->mainReq()->getPaddr(), (int)*(inst->memData));
+        } else {
+            DPRINTF(LSQUnit, "D-Cache: Writing back store idx:%i PC:%s "
+                    "to PAddr:%#x, data:%#x [sn:%lli]\n",
+                    storeWBIt.idx(), inst->pcState(),
+                    request->mainReq()->getPaddr(), (int)*(inst->memData),
+                    inst->seqNum);
+        }
 
         // @todo: Remove this SC hack once the memory system handles it.
         if (inst->isStoreConditional()) {
@@ -954,6 +974,7 @@ LSQUnit::writebackStores()
             PacketPtr main_pkt = new Packet(request->mainReq(),
                                             MemCmd::WriteReq);
             main_pkt->dataStatic(inst->memData);
+            // RETODO maybe something to do here?? need to find where the local accessor func is set
             request->mainReq()->localAccessor(thread, main_pkt);
             delete main_pkt;
             completeStore(storeWBIt);
@@ -1140,11 +1161,7 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
         return;
     }
 
-    // Runahead sanity checks
-    // If in runahead, the inst must be runahead. If not in runahead, it cannot be runahead
-    assert((cpu->inRunahead(inst->threadNumber) && inst->isRunahead())
-           || (!cpu->inRunahead(inst->threadNumber && !inst->isRunahead())));
-    // In any case, a poisoned load should never writeback
+    // A poisoned load should never writeback
     assert(!(inst->isLoad() && inst->isPoisoned()));
 
     if (!inst->isExecuted()) {
@@ -1263,26 +1280,45 @@ LSQUnit::completeStore(typename StoreQueue::iterator store_idx)
 bool
 LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
 {
-    bool ret = true;
+    bool success = true;
     bool cache_got_blocked = false;
 
     LSQRequest *request = dynamic_cast<LSQRequest*>(data_pkt->senderState);
 
-    if (!lsq->cacheBlocked() &&
-        lsq->cachePortAvailable(isLoad)) {
-        if (!dcachePort->sendTimingReq(data_pkt)) {
-            ret = false;
-            cache_got_blocked = true;
-        }
-    } else {
-        ret = false;
+    DPRINTF(LSQUnit, "Attempting to send packet (Addr %#x) to cache. load: %d\n",
+            data_pkt->getAddr(), isLoad);
+
+    /**
+     * If in runahead, try to send to runahead cache.
+     * If the packet is a store, this will always succeed.
+     * If it is a load that misses, the load must retry in normal cache.
+     */
+    bool rcSuccess = false;
+    if (request->isRunahead()) {
+        // If this doesn't succeed the request will "retry" by being sent to real cache
+        rcSuccess = lsq->sendToRunaheadCache(data_pkt);
+        if (!rcSuccess)
+            DPRINTF(RunaheadLSQ, "Packet failed in R-cache, sending to real cache.\n");
     }
 
-    if (ret) {
+    if (!rcSuccess || !request->isRunahead()) {
+        if (!lsq->cacheBlocked() &&
+            lsq->cachePortAvailable(isLoad)) {
+            if (!dcachePort->sendTimingReq(data_pkt)) {
+                success = false;
+                cache_got_blocked = true;
+            }
+        } else {
+            success = false;
+        }
+    }
+
+    if (success) {
         if (!isLoad) {
             isStoreBlocked = false;
         }
-        lsq->cachePortBusy(isLoad);
+        if (!rcSuccess)
+            lsq->cachePortBusy(isLoad);
         request->packetSent();
     } else {
         if (cache_got_blocked) {
@@ -1298,8 +1334,8 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
     DPRINTF(LSQUnit, "Memory request (pkt: %s) from inst [sn:%llu] was"
             " %ssent (cache is blocked: %d, cache_got_blocked: %d)\n",
             data_pkt->print(), request->instruction()->seqNum,
-            ret ? "": "not ", lsq->cacheBlocked(), cache_got_blocked);
-    return ret;
+            success ? "": "not ", lsq->cacheBlocked(), cache_got_blocked);
+    return success;
 }
 
 void

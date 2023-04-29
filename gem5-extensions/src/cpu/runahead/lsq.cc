@@ -218,6 +218,38 @@ LSQ::cachePortBusy(bool is_load)
     }
 }
 
+bool
+LSQ::sendToRunaheadCache(PacketPtr pkt)
+{
+    bool success = runaheadCache->handlePacket(pkt);
+    if (!success)
+        return false;
+
+    DPRINTF(RunaheadLSQ, "Successfully sent packet (Addr %#x) to runahead cache. "
+                         "Scheduling response.\n",
+                         pkt->getAddr());
+
+    // Schedule a fake timing response immediately
+    // *technically* a cache port should receive it but dcache just forwards the response
+    // to the LSQ anyways
+    EventFunctionWrapper *event = new EventFunctionWrapper(
+        [this, pkt]() { recvTimingResp(pkt); },
+        csprintf("reCachePktResp.%#x", pkt->getAddr()), true);
+    cpu->schedule(event, curTick() + 1);
+
+    return true;
+}
+
+void
+LSQ::setRunaheadCache(RunaheadCache *cache)
+{
+    runaheadCache = cache;
+
+    // for (LSQUnit &unit : thread) {
+    //     unit.setRunaheadCache(cache);
+    // }
+}
+
 void
 LSQ::insertLoad(const DynInstPtr &load_inst)
 {
@@ -831,6 +863,18 @@ LSQ::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
         inst->getFault() = NoFault;
 
         request->initiateTranslation();
+    }
+
+    // Propagate the runahead flag to the request
+    if (inst->isRunahead()) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead mem request created, marking it as such.\n",
+                inst->seqNum);
+        request->setRunahead();
+    }
+
+    // And poison if the instruction is a poisoned store
+    if (inst->isStore() && inst->isPoisoned()) {
+        request->setPoisoned();
     }
 
     /* This is the place were instructions get the effAddr. */

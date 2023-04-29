@@ -63,6 +63,7 @@
 #include "cpu/runahead/limits.hh"
 #include "cpu/runahead/rename.hh"
 #include "cpu/runahead/rob.hh"
+#include "cpu/runahead/runahead_cache.hh"
 #include "cpu/runahead/scoreboard.hh"
 #include "cpu/runahead/thread_state.hh"
 #include "cpu/activity.hh"
@@ -497,6 +498,9 @@ public:
 
     /** The re-order buffer. */
     ROB rob;
+
+    /** Runahead cache for holding store writebacks in runahead execution */
+    RunaheadCache runaheadCache;
 
     /** Active Threads List */
     std::list<ThreadID> activeThreads;

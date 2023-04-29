@@ -338,6 +338,14 @@ IEW::setIEWQueue(TimeBuffer<IEWStruct> *iq_ptr)
 }
 
 void
+IEW::setRunaheadCache(RunaheadCache *cache)
+{
+    // Passthrough to the LSQ which will actually use it
+    runaheadCache = cache;
+    ldstQueue.setRunaheadCache(cache);
+}
+
+void
 IEW::setActiveThreads(std::list<ThreadID> *at_ptr)
 {
     activeThreads = at_ptr;

@@ -50,6 +50,7 @@
 #include "cpu/runahead/inst_queue.hh"
 #include "cpu/runahead/limits.hh"
 #include "cpu/runahead/lsq.hh"
+#include "cpu/runahead/runahead_cache.hh"
 #include "cpu/runahead/scoreboard.hh"
 #include "cpu/timebuf.hh"
 #include "debug/IEW.hh"
@@ -149,6 +150,9 @@ class IEW
 
     /** Sets time buffer to pass on instructions to commit. */
     void setIEWQueue(TimeBuffer<IEWStruct> *iq_ptr);
+
+    /** Sets the runahead cache pointer */
+    void setRunaheadCache(RunaheadCache *cache);
 
     /** Sets pointer to list of active threads. */
     void setActiveThreads(std::list<ThreadID> *at_ptr);
@@ -340,6 +344,9 @@ class IEW
 
     /** Scoreboard pointer. */
     Scoreboard* scoreboard;
+
+    /** Runahead cache pointer */
+    RunaheadCache *runaheadCache;
 
   private:
     /** CPU pointer. */

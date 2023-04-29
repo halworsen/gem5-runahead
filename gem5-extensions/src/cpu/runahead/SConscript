@@ -51,6 +51,7 @@ if env['CONF']['TARGET_ISA'] != 'null':
     Source('rename.cc')
     Source('rename_map.cc')
     Source('rob.cc')
+    Source('runahead_cache.cc')
     Source('scoreboard.cc')
     Source('store_set.cc')
     Source('thread_context.cc')
@@ -63,11 +64,12 @@ if env['CONF']['TARGET_ISA'] != 'null':
     DebugFlag('RunaheadFetch')
     DebugFlag('RunaheadCommit')
     DebugFlag('RunaheadIEW')
+    DebugFlag('RCache')
 
     CompoundFlag('Runahead', [
         'RunaheadCPU', 'RunaheadFetch', 'RunaheadRename',
         'RunaheadCheckpoint', 'RunaheadLSQ', 'RunaheadCommit',
-        'RunaheadIEW',
+        'RunaheadIEW', 'RCache',
     ])
 
     SimObject('BaseRunaheadChecker.py', sim_objects=['BaseRunaheadChecker'])

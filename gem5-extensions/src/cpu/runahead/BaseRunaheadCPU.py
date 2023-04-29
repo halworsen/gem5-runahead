@@ -171,3 +171,22 @@ class BaseRunaheadCPU(BaseCPU):
         'Depth threshold after which a request to be considered a long latency load'
     )
 
+    runaheadCacheSize = Param.MemorySize('2kB', "Runahead cache capacity")
+
+    filterRunaheadInstructions = Param.Bool(
+        True,
+        'In runahead, should the CPU filter instructions to only loads'
+        ' and instructions that generate memory addresses'
+    )
+
+    # Can be set to a massive number to practically disable
+    runaheadInFlightThreshold = Param.Cycles(
+        200,
+        'The amount of cycles a memory access has been in-flight for after which it cannot'
+        ' trigger runahead due to the assumption that the load will complete soon.'
+    )
+
+    runaheadCanOverlap = Param.Bool(
+        False,
+        'Should the CPU allow overlapping runahead periods'
+    )
