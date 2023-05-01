@@ -97,10 +97,10 @@ LSQUnit::recvTimingResp(PacketPtr pkt)
     assert(request != nullptr);
     bool ret = true;
 
-    // Track received responses from runahead loads
+    // Track received responses from runahead instructions
     const DynInstPtr &inst = request->instruction();
     if (inst->isRunahead()) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead load (PC %s) received timing response. "
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead mem inst (PC %s) received timing response. "
                              "Request hit depths:\n",
                              inst->seqNum, inst->pcState());
 
@@ -192,13 +192,13 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
 
     // If the data access was made by a poisoned load, do nothing
     if (inst->isLoad() && inst->isPoisoned()) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned load (PC %s) completed data access, ignoring.\n",
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned load (PC %s) completed data access. "
+                             "Writeback will be ignored.\n",
                              inst->seqNum, inst->pcState());
         // We know this must have been made by a valid LLL because loads that
         // are poisoned on arrival do not send any requests to cache. Only LLLs can send
         // data to cache, after which they become poisoned.
         ++stats.runaheadLLLsCompleted;
-        return;
     }
 
     // If it's a memory op that was initiated during runahead but we've since exited it, do (almost) nothing
@@ -863,7 +863,6 @@ void
 LSQUnit::writebackStores()
 {
     if (isStoreBlocked) {
-        assert(!cpu->inRunahead(storeWBIt->instruction()->threadNumber));
         DPRINTF(LSQUnit, "Writing back  blocked store\n");
         writebackBlockedStore();
     }
@@ -883,8 +882,7 @@ LSQUnit::writebackStores()
             continue;
         }
 
-        if (isStoreBlocked && !inst->isRunahead()) {
-            assert(!cpu->inRunahead(inst->threadNumber));
+        if (isStoreBlocked) {
             DPRINTF(LSQUnit, "Unable to write back any more stores, cache"
                     " is blocked!\n");
             break;
@@ -1171,15 +1169,13 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
         return;
     }
 
-    // A poisoned load should never writeback
-    assert(!(inst->isLoad() && inst->isPoisoned()));
-
     if (!inst->isExecuted()) {
         inst->setExecuted();
 
         if (inst->fault == NoFault) {
             // Complete access to copy data to proper place.
-            inst->completeAcc(pkt);
+            if (!(inst->isLoad() && inst->isPoisoned()))
+                inst->completeAcc(pkt);
         } else {
             // If the instruction has an outstanding fault, we cannot complete
             // the access as this discards the current fault.

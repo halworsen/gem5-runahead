@@ -225,15 +225,18 @@ LSQ::sendToRunaheadCache(PacketPtr pkt)
     if (!success)
         return false;
 
-    DPRINTF(RunaheadLSQ, "Successfully sent packet (Addr %#x) to runahead cache. "
+    DPRINTF(RunaheadLSQ, "Successfully sent packet (Addr %#x) (rd:%i) to runahead cache. "
                          "Scheduling response.\n",
-                         pkt->getAddr());
+                         pkt->getAddr(), pkt->isRead());
 
     // Schedule a fake timing response immediately
     // *technically* a cache port should receive it but dcache just forwards the response
     // to the LSQ anyways
     EventFunctionWrapper *event = new EventFunctionWrapper(
-        [this, pkt]() { recvTimingResp(pkt); },
+        [this, pkt]() {
+            DPRINTF(RunaheadLSQ, "Scheduled runahead cache response arriving.\n");
+            recvTimingResp(pkt);
+        },
         csprintf("reCachePktResp.%#x", pkt->getAddr()), true);
     cpu->schedule(event, curTick() + 1);
 
