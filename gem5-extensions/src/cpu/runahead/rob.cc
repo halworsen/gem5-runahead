@@ -198,6 +198,9 @@ ROB::startRunahead(ThreadID tid)
 {
     for (DynInstPtr inst : instList[tid]) {
         inst->setRunahead();
+
+        if (inst->hasRequest() && inst->savedRequest != nullptr)
+            inst->savedRequest->setRunahead();
     }
 }
 
