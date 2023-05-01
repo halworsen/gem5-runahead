@@ -64,7 +64,6 @@ void
 RunaheadCache::write(PacketPtr pkt)
 {
     assert(pkt->isWrite());
-    assert(!pkt->needsResponse());
 
     DPRINTF(RCache, "Performing R-cache write to block at addr %#x (unaligned %#x)\n",
             align(pkt->getAddr()), pkt->getAddr());
