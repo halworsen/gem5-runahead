@@ -1033,7 +1033,7 @@ Commit::commitInsts()
             gem5::runahead::LSQ::LSQRequest *lsqRequest = head_inst->savedRequest;
             // That request must not be completed
             // This may be unnecessary? Load may be marked as ready when the request completes
-            if (lsqRequest->isComplete()) {
+            if (lsqRequest == nullptr || lsqRequest->isComplete()) {
                 break;
             }
 
