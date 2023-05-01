@@ -1444,10 +1444,15 @@ IEW::writebackInsts()
                 // Mark register as ready if not pinned
                 if (inst->renamedDestIdx(i)->
                         getNumPinnedWritesToComplete() == 0) {
-                    DPRINTF(IEW,"Setting Destination Register %i (%s)\n",
+                    DPRINTF(IEW,"Readying destination register %i (%s)\n",
                             inst->renamedDestIdx(i)->index(),
                             inst->renamedDestIdx(i)->className());
                     scoreboard->setReg(inst->renamedDestIdx(i));
+                }
+
+                // Mark it as poisoned if the instruction was poisoned
+                if (inst->isPoisoned()) {
+                    cpu->regPoisoned(inst->renamedDestIdx(i), true);
                 }
             }
 

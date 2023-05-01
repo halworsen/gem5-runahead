@@ -11,6 +11,8 @@ venv/
 
 # misc. output redirections
 *.txt
+# markdown notes
+notes.md
 
 # output files
 *.out
