@@ -955,7 +955,16 @@ InstructionQueue::commit(const InstSeqNum &inst, ThreadID tid)
     while (iq_it != instList[tid].end() &&
            (*iq_it)->seqNum <= inst) {
         ++iq_it;
+        DynInstPtr inst = instList[tid].front();
         instList[tid].pop_front();
+
+        // Poisoned insts may commit before they are executed.
+        // If so, we must free their slot in the IQ.
+        if (inst->isPoisoned() && inst->isIssued()) {
+            ++freeEntries;
+            count[tid]--;
+            inst->clearInIQ();
+        }
     }
 
     assert(freeEntries == (numEntries - countInsts()));
