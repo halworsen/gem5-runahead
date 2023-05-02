@@ -1679,6 +1679,13 @@ CPU::regPoisoned(PhysRegIdPtr physReg, bool poisoned)
             break;
         }
     }
+    if (poisoned) {
+        DPRINTF(RunaheadCPU, "Poisoning physreg %i (flat: %i) (type: %s)\n",
+                physReg->index(), physReg->flatIndex(), physReg->className());
+    } else {
+        DPRINTF(RunaheadCPU, "Curing physreg %i (flat: %i) (type: %s)\n",
+                physReg->index(), physReg->flatIndex(), physReg->className());
+    }
     regFile.regPoisoned(physReg, poisoned);
 }
 

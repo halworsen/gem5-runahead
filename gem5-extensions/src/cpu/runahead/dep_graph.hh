@@ -118,6 +118,7 @@ class DependencyGraph
     /** Debugging function to dump out the dependency graph.
      */
     void dump();
+    void dump(RegIndex idx);
 
   private:
     /** Array of linked lists.  Each linked list is a list of all the
@@ -295,6 +296,30 @@ DependencyGraph<DynInstPtr>::dump()
 
         cprintf("\n");
     }
+    cprintf("memAllocCounter: %i\n", memAllocCounter);
+}
+
+template <class DynInstPtr>
+void
+DependencyGraph<DynInstPtr>::dump(RegIndex idx)
+{
+    DepEntry *graph = &dependGraph[idx];
+
+    if (graph->inst) {
+        cprintf("dependGraph[%i]: producer: %s [sn:%lli] consumer: ",
+                idx, graph->inst->pcState(), graph->inst->seqNum);
+    } else {
+        cprintf("dependGraph[%i]: No producer. consumer: ", idx);
+    }
+
+    while (graph->next != NULL) {
+        graph = graph->next;
+        cprintf("%s [sn:%lli] ",
+                graph->inst->pcState(), graph->inst->seqNum);
+    }
+
+    cprintf("\n");
+
     cprintf("memAllocCounter: %i\n", memAllocCounter);
 }
 

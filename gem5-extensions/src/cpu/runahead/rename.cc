@@ -1064,7 +1064,7 @@ Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
 
         // If in runahead and the instruction sources an invalid register, the instruction becomes poisoned
         if (cpu->regPoisoned(renamed_reg)) {
-            assert(cpu->inRunahead(tid));
+            assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
             inst->setPoisoned();
         }
 

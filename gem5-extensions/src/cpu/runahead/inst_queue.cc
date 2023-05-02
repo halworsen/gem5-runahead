@@ -1406,8 +1406,10 @@ InstructionQueue::addToProducers(const DynInstPtr &new_inst)
             continue;
         }
 
+        // An instruction should never produce a register which is in use by another instruction
+        // In other words, a register can only have one producer (but multiple consumers)
         if (!dependGraph.empty(dest_reg->flatIndex())) {
-            dependGraph.dump();
+            dependGraph.dump(dest_reg->flatIndex());
             panic("Dependency graph %i (%s) (flat: %i) not empty!",
                   dest_reg->index(), dest_reg->className(),
                   dest_reg->flatIndex());

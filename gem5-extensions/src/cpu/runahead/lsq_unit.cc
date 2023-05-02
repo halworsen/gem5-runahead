@@ -1173,7 +1173,7 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
         inst->setExecuted();
 
         if (inst->fault == NoFault) {
-            // Complete access to copy data to proper place.
+            // Complete access to copy data to proper place if it isn't a poisoned load.
             if (!(inst->isLoad() && inst->isPoisoned()))
                 inst->completeAcc(pkt);
         } else {
