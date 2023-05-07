@@ -697,15 +697,6 @@ LSQUnit::executeLoad(const DynInstPtr &inst)
 
     assert(!inst->isSquashed());
 
-    // Loads that are poisoned on arrival are ignored and sent straight to commit
-    if (inst->isPoisoned()) {
-        inst->setExecuted();
-        //inst->completeAcc(nullptr);
-        iewStage->instToCommit(inst);
-        iewStage->activityThisCycle();
-        return NoFault;
-    }
-
     load_fault = inst->initiateAcc();
 
     if (load_fault == NoFault && !inst->readMemAccPredicate()) {
@@ -744,8 +735,7 @@ LSQUnit::executeLoad(const DynInstPtr &inst)
         DPRINTF(LSQUnit, "Load [sn:%lli] not executed from %s\n",
             inst->seqNum,
             (load_fault != NoFault ? "fault" : "predication"));
-        if (!(inst->hasRequest() && inst->strictlyOrdered()) ||
-            inst->isAtCommit()) {
+        if (!(inst->hasRequest() && inst->strictlyOrdered()) || inst->isAtCommit()) {
             inst->setExecuted();
         }
         iewStage->instToCommit(inst);

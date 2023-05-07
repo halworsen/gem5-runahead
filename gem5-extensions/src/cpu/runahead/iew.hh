@@ -460,6 +460,8 @@ class IEW
         /** Stat for total number of mispredicted branches detected at
          *  execute. */
         statistics::Formula branchMispredicts;
+        /** Stat for memop faults that occured after a divergence point in runahead */
+        statistics::Scalar divergentFaults;
 
         struct ExecutedInstStats : public statistics::Group
         {

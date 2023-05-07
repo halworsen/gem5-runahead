@@ -1601,6 +1601,7 @@ CPU::exitRunahead(ThreadID tid)
     DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead. Instructions pseudoretired: %i\n",
                          tid, instsPseudoretired);
     inRunahead(tid, false);
+    possiblyDiverging(tid, false);
 
     // Squash every instruction after the LLL that caused runahead
     const DynInstPtr squashInst = runaheadCause[tid];

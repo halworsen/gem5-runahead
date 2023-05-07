@@ -176,6 +176,8 @@ IEW::IEWStats::IEWStats(CPU *cpu)
     ADD_STAT(branchMispredicts, statistics::units::Count::get(),
              "Number of branch mispredicts detected at execute",
              predictedTakenIncorrect + predictedNotTakenIncorrect),
+    ADD_STAT(divergentFaults, statistics::units::Count::get(),
+             "Number of faults that were dropped due to occuring after a poisoned branch"),
     executedInstStats(cpu),
     ADD_STAT(instsToCommit, statistics::units::Count::get(),
              "Cumulative count of insts sent to commit"),
@@ -215,6 +217,8 @@ IEW::IEWStats::IEWStats(CPU *cpu)
     wbFanout
         .flags(statistics::total);
     wbFanout = producerInst / consumerInst;
+
+    divergentFaults.prereq(divergentFaults);
 }
 
 IEW::IEWStats::ExecutedInstStats::ExecutedInstStats(CPU *cpu)
@@ -1254,6 +1258,7 @@ IEW::executeInsts()
                 // Destination registers will be marked as poisoned in writeback
                 inst->setExecuted();
                 instToCommit(inst);
+                activityThisCycle();
             }
 
             ++iewStats.executedInstStats.numPoisonedInsts;
@@ -1261,9 +1266,10 @@ IEW::executeInsts()
             // execution to commit beyond a mispredicted branch.
             if (inst->isControl()) {
                 DPRINTF(RunaheadIEW, "[sn:%llu] Skipped poisoned branch! If this branch was "
-                                     "mispredicted, wrong path insts will now be committed. "
+                                     "mispredicted, wrong path insts will now be psuedoretired. "
                                      "PredPC: %s, taken: %i\n",
                                      inst->seqNum, inst->readPredTarg(), inst->readPredTaken());
+                cpu->possiblyDiverging(inst->threadNumber, true);
                 ++iewStats.executedInstStats.numPoisonedBranches;
             }
 
@@ -1341,6 +1347,20 @@ IEW::executeInsts()
                 panic("Unexpected memory type!\n");
             }
 
+            // If the CPU is possibly on the wrong path of execution in runahead,
+            // faults are dropped and the memop is poisoned, then sent to commit
+            if (fault != NoFault &&
+                inst->isRunahead() && cpu->possiblyDiverging(inst->threadNumber)) {
+                inst->fault = NoFault;
+                ++iewStats.divergentFaults;
+
+                // The inst may have been set as executed already (e.g. loads do this on a fault)
+                if (!inst->isExecuted()) {
+                    inst->setExecuted();
+                    instToCommit(inst);
+                    activityThisCycle();
+                }
+            }
         } else {
             // If the instruction has already faulted, then skip executing it.
             // Such case can happen when it faulted during ITLB translation.

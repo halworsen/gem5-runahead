@@ -396,6 +396,9 @@ private:
     /** Tracks which threads are in runahead */
     bool runaheadStatus[MaxThreads];
 
+    /** Whether or not the CPU is possibly diverging from correct execution */
+    bool branchDivergence[MaxThreads];
+
     /**
      * Whether or not an arch state checkpoint restore is currently pending
      * This happens after the pipeline is flushed by a runahead exit
@@ -424,7 +427,13 @@ public:
     /** Set whether or not a thread is in runahead */
     void inRunahead(ThreadID tid, bool state) { runaheadStatus[tid] = state; };
 
-    /** Is an arch state restore imminent? */
+    /** Whether or not the given thread is possibly diverging from correct execution */
+    bool possiblyDiverging(ThreadID tid) { return branchDivergence[tid]; };
+
+    /** Set whether or not the given thread is possibly diverging from correct execution */
+    void possiblyDiverging(ThreadID tid, bool diverging) { branchDivergence[tid] = diverging; };
+
+    /** Is an arch state restore pending? */
     bool isArchSquashPending(ThreadID tid) { return archSquashPending[tid]; };
 
     /** Check if the given instruction caused the CPU to enter runahead */
