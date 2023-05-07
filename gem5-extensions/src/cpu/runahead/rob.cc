@@ -195,22 +195,6 @@ ROB::countInsts(ThreadID tid)
 }
 
 void
-ROB::startRunahead(ThreadID tid)
-{
-    for (DynInstPtr inst : instList[tid]) {
-        DPRINTF(RunaheadROB, "[tid:%i] Marking instruction [sn:%llu] PC %s as runahead\n",
-                tid, inst->seqNum, inst->pcState());
-        inst->setRunahead();
-
-        if (inst->hasRequest() && inst->savedRequest != nullptr) {
-        DPRINTF(RunaheadROB, "[tid:%i] Inst [sn:%llu] had request, marking it as runahead\n",
-                tid, inst->seqNum);
-            inst->savedRequest->setRunahead();
-        }
-    }
-}
-
-void
 ROB::insertInst(const DynInstPtr &inst)
 {
     assert(inst);

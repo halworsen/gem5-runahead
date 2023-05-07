@@ -1257,8 +1257,15 @@ IEW::executeInsts()
             }
 
             ++iewStats.executedInstStats.numPoisonedInsts;
-            if (inst->isControl())
+            // Poisoned branches at execute are dicey. They may be mispredicted, causing
+            // execution to commit beyond a mispredicted branch.
+            if (inst->isControl()) {
+                DPRINTF(RunaheadIEW, "[sn:%llu] Skipped poisoned branch! If this branch was "
+                                     "mispredicted, wrong path insts will now be committed. "
+                                     "PredPC: %s, taken: %i\n",
+                                     inst->seqNum, inst->readPredTarg(), inst->readPredTaken());
                 ++iewStats.executedInstStats.numPoisonedBranches;
+            }
 
             continue;
         }

@@ -267,9 +267,6 @@ class ROB
      */
     size_t countInsts(ThreadID tid);
 
-    /** Prepare to enter runahead by marking all instructions as runahead instructions */
-    void startRunahead(ThreadID tid);
-
   private:
     /** Reset the ROB state */
     void resetState();

@@ -1568,7 +1568,7 @@ CPU::enterRunahead(ThreadID tid)
     // Store the instruction that caused entry into runahead
     runaheadCause[tid] = robHead;
 
-    /** 
+    /**
       * Mark all in-flight instructions as runahead
       * Note that it is not enough to mark all ROB instructions as runahead
       * Some instructions may be in frontend buffers or commited stores,
