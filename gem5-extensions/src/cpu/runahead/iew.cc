@@ -221,10 +221,14 @@ IEW::IEWStats::ExecutedInstStats::ExecutedInstStats(CPU *cpu)
     : statistics::Group(cpu),
     ADD_STAT(numInsts, statistics::units::Count::get(),
              "Number of executed instructions"),
+    ADD_STAT(numPoisonedInsts, statistics::units::Count::get(),
+             "Number of poisoned instructions executed"),
     ADD_STAT(numLoadInsts, statistics::units::Count::get(),
              "Number of load instructions executed"),
     ADD_STAT(numSquashedInsts, statistics::units::Count::get(),
              "Number of squashed instructions skipped in execute"),
+    ADD_STAT(numPoisonedBranches, statistics::units::Count::get(),
+             "Number of poisoned control instructions skipped in execute"),
     ADD_STAT(numSwp, statistics::units::Count::get(),
              "Number of swp insts executed"),
     ADD_STAT(numNop, statistics::units::Count::get(),
@@ -949,7 +953,6 @@ IEW::dispatchInsts(ThreadID tid)
         if (inst->isSquashed()) {
             DPRINTF(IEW, "[tid:%i] Issue: Squashed instruction encountered, "
                     "not adding to IQ.\n", tid);
-
             ++iewStats.dispSquashedInsts;
 
             insts_to_dispatch.pop();
@@ -1220,6 +1223,46 @@ IEW::executeInsts()
 
         Fault fault = NoFault;
 
+        // Most poisoned-on-arrival instructions do not need to execute
+        if (inst->isPoisoned()) {
+            assert(cpu->inRunahead(inst->threadNumber) ||
+                   cpu->isArchSquashPending(inst->threadNumber));
+            DPRINTF(RunaheadIEW, "[sn:%llu] Instruction with PC %s was poisoned, skipping.\n",
+                                inst->seqNum, inst->pcState());
+
+            // Stores are an exception. They should translate. If the address is valid,
+            // it must write poison into the runahead cache
+            if (inst->isStore()) {
+                fault = ldstQueue.executeStore(inst);
+                // If there was a fault, mark the store as executed and move on
+                if (fault != NoFault) {
+                    DPRINTF(RunaheadIEW, "[sn:%llu] Poisoned store faulted with %s, "
+                            "ignoring and resetting fault.\n",
+                            inst->seqNum, fault->name());
+                    inst->fault = NoFault;
+                    inst->setExecuted();
+                    instToCommit(inst);
+                    activityThisCycle();
+                } else if (inst->isTranslationDelayed()) {
+                    // Defer the store if address translation is delayed
+                    DPRINTF(RunaheadIEW, "[sn:%llu] Poisoned store has delayed translation, "
+                            "deferring.\n");
+                    instQueue.deferMemInst(inst);
+                }
+            } else {
+                // All other instructions are immediately marked as executed and sent to commit
+                // Destination registers will be marked as poisoned in writeback
+                inst->setExecuted();
+                instToCommit(inst);
+            }
+
+            ++iewStats.executedInstStats.numPoisonedInsts;
+            if (inst->isControl())
+                ++iewStats.executedInstStats.numPoisonedBranches;
+
+            continue;
+        }
+
         // Execute instruction.
         // Note that if the instruction faults, it will be handled
         // at the commit stage.
@@ -1441,18 +1484,26 @@ IEW::writebackInsts()
             int dependents = instQueue.wakeDependents(inst);
 
             for (int i = 0; i < inst->numDestRegs(); i++) {
+                PhysRegIdPtr destReg = inst->renamedDestIdx(i);
                 // Mark register as ready if not pinned
-                if (inst->renamedDestIdx(i)->
-                        getNumPinnedWritesToComplete() == 0) {
+                if (destReg->getNumPinnedWritesToComplete() == 0) {
                     DPRINTF(IEW,"Readying destination register %i (%s)\n",
-                            inst->renamedDestIdx(i)->index(),
-                            inst->renamedDestIdx(i)->className());
-                    scoreboard->setReg(inst->renamedDestIdx(i));
+                            destReg->index(),
+                            destReg->className());
+                    scoreboard->setReg(destReg);
                 }
 
                 // Mark it as poisoned if the instruction was poisoned
                 if (inst->isPoisoned()) {
-                    cpu->regPoisoned(inst->renamedDestIdx(i), true);
+                    assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
+                    DPRINTF(RunaheadIEW,
+                            "[sn:%llu] Poisoning destination register %i (%s) (flat:%i)\n",
+                            inst->seqNum, destReg->index(),
+                            destReg->className(), destReg->flatIndex());
+                    cpu->regPoisoned(destReg, true);
+                } else {
+                    // And "cure" the register if the instruction was valid
+                    cpu->regPoisoned(destReg, false);
                 }
             }
 

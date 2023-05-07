@@ -47,6 +47,7 @@
 #include "cpu/runahead/limits.hh"
 #include "debug/Fetch.hh"
 #include "debug/ROB.hh"
+#include "debug/RunaheadROB.hh"
 #include "params/BaseRunaheadCPU.hh"
 
 namespace gem5
@@ -197,10 +198,15 @@ void
 ROB::startRunahead(ThreadID tid)
 {
     for (DynInstPtr inst : instList[tid]) {
+        DPRINTF(RunaheadROB, "[tid:%i] Marking instruction [sn:%llu] PC %s as runahead\n",
+                tid, inst->seqNum, inst->pcState());
         inst->setRunahead();
 
-        if (inst->hasRequest() && inst->savedRequest != nullptr)
+        if (inst->hasRequest() && inst->savedRequest != nullptr) {
+        DPRINTF(RunaheadROB, "[tid:%i] Inst [sn:%llu] had request, marking it as runahead\n",
+                tid, inst->seqNum);
             inst->savedRequest->setRunahead();
+        }
     }
 }
 
@@ -254,7 +260,7 @@ ROB::retireHead(ThreadID tid)
     DynInstPtr head_inst = std::move(*head_it);
     instList[tid].erase(head_it);
 
-    assert(head_inst->readyToCommit() || head_inst->isPoisoned());
+    assert(head_inst->readyToCommit());
 
     DPRINTF(ROB, "[tid:%i] Retiring head instruction, "
             "instruction PC %s, [sn:%llu]\n", tid, head_inst->pcState(),
@@ -281,7 +287,7 @@ ROB::isHeadReady(ThreadID tid)
     stats.reads++;
     if (threadEntries[tid] != 0) {
         DynInstPtr &head = instList[tid].front();
-        return (head->readyToCommit() || head->isPoisoned());
+        return head->readyToCommit();
     }
 
     return false;

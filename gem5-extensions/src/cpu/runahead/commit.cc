@@ -1054,19 +1054,20 @@ Commit::commitInsts()
                     ++stats.lllAtROBHead;
 
                     // If not already in runahead, enter it
+                    // If in runahead, make sure the load isn't already poisoned (waiting to drain)
                     if (!cpu->inRunahead(tid)) {
                         cpu->enterRunahead(tid);
-                    } else {
+                    } else if (!head_inst->isPoisoned()) {
                         // If in runahead, immediately "complete" it to avoid blocking on it
                         assert(head_inst->isRunahead());
                         DPRINTF(RunaheadCommit,
-                                "[tid:%i] Load was a runahead LLL. "
-                                "Poisoning and continuing next cycle.\n", tid);
-                        head_inst->setPoisoned();
+                                "[tid:%i] Load was a runahead LLL. Poisoning.\n", tid);
+                        // Tell the CPU to deal with it. This is extremely ugly. And hacky.
+                        cpu->handleRunaheadLLL(head_inst);
                     }
                 }
             }
-            
+
             break;
         }
 
@@ -1226,14 +1227,14 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
     // If the instruction is not executed yet, then it will need extra
     // handling.  Signal backwards that it should be executed.
-    // Poisoned instructions don't need to execute to retire.
-    if (!head_inst->isExecuted() && !head_inst->isPoisoned()) {
+    if (!head_inst->isExecuted()) {
         // Make sure we are only trying to commit un-executed instructions we
         // think are possible.
         assert(head_inst->isNonSpeculative() || head_inst->isStoreConditional()
                || head_inst->isReadBarrier() || head_inst->isWriteBarrier()
                || head_inst->isAtomic()
-               || (head_inst->isLoad() && head_inst->strictlyOrdered()));
+               || (head_inst->isLoad() && head_inst->strictlyOrdered())
+               || (head_inst->isStore() && head_inst->isPoisoned()));
 
         DPRINTF(Commit,
                 "Encountered a barrier or non-speculative "
@@ -1294,8 +1295,11 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     }
 
     if (inst_fault != NoFault) {
-        DPRINTF(Commit, "Inst [tid:%i] [sn:%llu] PC %s has a fault\n",
-                tid, head_inst->seqNum, head_inst->pcState());
+        DPRINTF(Commit,
+                "Inst [tid:%i] [sn:%llu] PC %s has a fault\n"
+                "Runahead:%i, Poison:%i\n",
+                tid, head_inst->seqNum, head_inst->pcState(),
+                head_inst->isRunahead(), head_inst->isPoisoned());
 
         if (iewStage->hasStoresToWB(tid) || inst_num > 0) {
             DPRINTF(Commit,
@@ -1381,12 +1385,12 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         renameMap[tid]->setEntry(head_inst->flattenedDestIdx(i),
                                  head_inst->renamedDestIdx(i));
 
-        // Mark all destination registers as poisoned if the instruction was poisoned
-        if (head_inst->isPoisoned()) {
-            // This can only occur when the CPU is in runahead or when an arch squash is imminent
-            assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
-            cpu->regPoisoned(head_inst->renamedDestIdx(i), true);
-        }
+        // Sanity check
+        // If the inst was poisoned writeback should have poisoned all destination regs
+        // Except for invalid regs, which are never poisoned
+        if (head_inst->isPoisoned())
+            assert(cpu->regPoisoned(head_inst->renamedDestIdx(i)) ||
+                   head_inst->renamedDestIdx(i)->classValue() == InvalidRegClass);
     }
 
     // Incremental update of arch checkpoint

@@ -204,10 +204,8 @@ ArchCheckpoint::updateReg(ThreadID tid, RegId archReg)
         return;
     }
 
-    if (archReg.classValue() == InvalidRegClass) {
-        DPRINTF(RunaheadCheckpoint, "Attempt to checkpoint invalid register\n");
+    if (archReg.classValue() == InvalidRegClass)
         return;
-    }
 
     RegVal val;
     if (archReg.classValue() == MiscRegClass) {

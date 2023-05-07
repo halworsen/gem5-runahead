@@ -685,8 +685,8 @@ Fetch::finishTranslation(const Fault &fault, const RequestPtr &mem_req)
         // wake up is if a squash comes along and changes the PC.
         const PCStateBase &fetch_pc = *pc[tid];
 
-        DPRINTF(Fetch, "[tid:%i] Translation faulted, building noop.\n", tid);
-        // We will use a nop in ordier to carry the fault.
+        DPRINTF(Fetch, "[tid:%i] Translation faulted, building noop to carry fault.\n", tid);
+        // We will use a nop in order to carry the fault.
         DynInstPtr instruction = buildInst(tid, nopStaticInstPtr, nullptr,
                 fetch_pc, fetch_pc, false);
         instruction->setNotAnInst();

@@ -467,11 +467,15 @@ class IEW
 
             /** Stat for total number of executed instructions. */
             statistics::Scalar numInsts;
+            /** Stat for total number of executed poisoned instructions. */
+            statistics::Scalar numPoisonedInsts;
             /** Stat for total number of executed load instructions. */
             statistics::Vector numLoadInsts;
             /** Stat for total number of squashed instructions skipped at
              *  execute. */
             statistics::Scalar numSquashedInsts;
+            /** Number of poisoned branches that were skipped at execute */
+            statistics::Scalar numPoisonedBranches;
             /** Number of executed software prefetches. */
             statistics::Vector numSwp;
             /** Number of executed nops. */

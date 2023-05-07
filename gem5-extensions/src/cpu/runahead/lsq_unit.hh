@@ -443,6 +443,9 @@ class LSQUnit
      */
     bool recvTimingResp(PacketPtr pkt);
 
+    /** Forge a writeback event for the given instruction */
+    void forgeResponse(const DynInstPtr &inst);
+
   private:
     /** The LSQUnit thread id. */
     ThreadID lsqID;

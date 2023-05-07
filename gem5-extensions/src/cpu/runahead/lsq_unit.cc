@@ -99,10 +99,11 @@ LSQUnit::recvTimingResp(PacketPtr pkt)
 
     // Track received responses from runahead instructions
     const DynInstPtr &inst = request->instruction();
-    if (inst->isRunahead()) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead mem inst (PC %s) received timing response. "
-                             "Request hit depths:\n",
-                             inst->seqNum, inst->pcState());
+    if (request->isRunahead() || inst->isRunahead()) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Runahead mem inst (PC %s) received timing response "
+                             "(Rcache resp:%i, expected:%i). Request hit depths:\n",
+                             inst->seqNum, inst->pcState(),
+                             request->rCacheResponding(), request->rCacheExpected());
 
         for (int idx = 0; idx < request->_reqs.size(); idx++) {
             int depth = request->req(idx)->getAccessDepth();
@@ -122,11 +123,40 @@ LSQUnit::recvTimingResp(PacketPtr pkt)
         cpu->exitRunahead(inst->threadNumber);
     }
 
+    if (inst->isLoad() && request->isPoisoned()) {
+        DPRINTF(RunaheadLSQ, "[tid:%i] [sn:%llu] Load with PC %s was poisoned by request.\n",
+                inst->threadNumber, inst->seqNum, inst->pcState());
+        inst->setPoisoned();
+    }
+
+    // All runahead stores should be handled by runahead cache
+    // The only acceptable exception is if the store entered the instruction window
+    // before the load that caused entry into runahead
+    if (inst->isStore() && inst->isRunahead() &&
+        inst->seqNum >= cpu->runaheadCause[inst->threadNumber]->seqNum)
+        assert(request->rCacheResponding());
+
     /* Check that the request is still alive before any further action. */
     if (!request->isReleased()) {
         ret = request->recvTimingResp(pkt);
     }
     return ret;
+}
+
+void
+LSQUnit::forgeResponse(const DynInstPtr &inst)
+{
+    LSQRequest *req = inst->savedRequest;
+
+    // Issue a bogus 0 for the memory data
+    DPRINTF(RunaheadLSQ, "Forging load response for load with [sn:%llu] PC %s\n",
+            inst->seqNum, inst->pcState());
+    PacketPtr pkt = new Packet(*req->packet());
+    memset(inst->memData, 0, req->mainReq()->getSize());
+
+    // Schedule writeback for the next cycle
+    WritebackEvent *wb = new WritebackEvent(inst, pkt, this);
+    cpu->schedule(wb, curTick());
 }
 
 void
@@ -190,10 +220,9 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
 
     cpu->ppDataAccessComplete->notify(std::make_pair(inst, pkt));
 
-    // If the data access was made by a poisoned load, do nothing
-    if (inst->isLoad() && inst->isPoisoned()) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned load (PC %s) completed data access. "
-                             "Writeback will be ignored.\n",
+    // If the data access was made by a poisoned load, track it
+    if (inst->isLoad() && inst->isPoisoned() && !request->rCacheResponding()) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Poisoned load (PC %s) completed data access.\n",
                              inst->seqNum, inst->pcState());
         // We know this must have been made by a valid LLL because loads that
         // are poisoned on arrival do not send any requests to cache. Only LLLs can send
@@ -201,25 +230,27 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
         ++stats.runaheadLLLsCompleted;
     }
 
-    // If it's a memory op that was initiated during runahead but we've since exited it, do (almost) nothing
-    // There's some state to clean up, particularly wrt. TSO
+    // If it's a memory op that was initiated during runahead but we've since exited it,
+    // do (almost) nothing.
     bool staleRunaheadCompletion = false;
-    if (inst->isRunahead() && !cpu->inRunahead(inst->threadNumber)) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu] Stale runahead inst (PC %s) "
-                             "completed data access, ignoring.\n",
-                            inst->seqNum, inst->pcState());
+    if ((request->isRunahead() || inst->isRunahead()) && !cpu->inRunahead(inst->threadNumber)) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Stale runahead inst (PC %s) completed data access.\n",
+                inst->seqNum, inst->pcState());
         staleRunaheadCompletion = true;
         ++stats.staleRunaheadInsts;
     }
 
     assert(!cpu->switchedOut());
+
+    
     if (!inst->isSquashed()) {
-        // Stale runahead instructions do not get to writeback
-        if (request->needWBToRegister() && !staleRunaheadCompletion) {
+        // If we're expecting R-cache to handle the request, the request must contain a R-cache response
+        if (request->needWBToRegister() && !staleRunaheadCompletion &&
+            !(request->rCacheExpected() && !request->rCacheResponding())) {
             // Only loads, store conditionals and atomics perform the writeback
             // after receving the response from the memory
             assert(inst->isLoad() || inst->isStoreConditional() ||
-                   inst->isAtomic());
+                inst->isAtomic());
 
             // hardware transactional memory
             if (pkt->htmTransactionFailedInCache()) {
@@ -235,8 +266,11 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
         } else if (inst->isStore()) {
             // This is a regular store (i.e., not store conditionals and
             // atomics), so it can complete without writing back
+            // Runahead stores will never access real cache
             completeStore(request->instruction()->sqIt);
         }
+
+        request->clearRCacheResponding();
     }
 }
 
@@ -666,6 +700,7 @@ LSQUnit::executeLoad(const DynInstPtr &inst)
     // Loads that are poisoned on arrival are ignored and sent straight to commit
     if (inst->isPoisoned()) {
         inst->setExecuted();
+        //inst->completeAcc(nullptr);
         iewStage->instToCommit(inst);
         iewStage->activityThisCycle();
         return NoFault;
@@ -705,9 +740,10 @@ LSQUnit::executeLoad(const DynInstPtr &inst)
         // commit.
         if (!inst->readPredicate())
             inst->forwardOldRegs();
+
         DPRINTF(LSQUnit, "Load [sn:%lli] not executed from %s\n",
-                inst->seqNum,
-                (load_fault != NoFault ? "fault" : "predication"));
+            inst->seqNum,
+            (load_fault != NoFault ? "fault" : "predication"));
         if (!(inst->hasRequest() && inst->strictlyOrdered()) ||
             inst->isAtCommit()) {
             inst->setExecuted();
@@ -938,6 +974,7 @@ LSQUnit::writebackStores()
                     inst->seqNum, storeWBIt.idx(), inst->pcState(),
                     request->mainReq()->getPaddr(), (int)*(inst->memData));
         } else {
+            assert(!inst->isPoisoned());
             DPRINTF(LSQUnit, "D-Cache: Writing back store idx:%i PC:%s "
                     "to PAddr:%#x, data:%#x [sn:%lli]\n",
                     storeWBIt.idx(), inst->pcState(),
@@ -982,7 +1019,7 @@ LSQUnit::writebackStores()
             PacketPtr main_pkt = new Packet(request->mainReq(),
                                             MemCmd::WriteReq);
             main_pkt->dataStatic(inst->memData);
-            // RETODO maybe something to do here?? need to find where the local accessor func is set
+            // RETODO: maybe something to do here?? need to find where the local accessor func is set
             request->mainReq()->localAccessor(thread, main_pkt);
             delete main_pkt;
             completeStore(storeWBIt);
@@ -1007,7 +1044,7 @@ LSQUnit::writebackStores()
 void
 LSQUnit::squash(const InstSeqNum &squashed_num)
 {
-    DPRINTF(LSQUnit, "Squashing until [sn:%lli]!"
+    DPRINTF(LSQUnit, "Squashing until [sn:%lli]! "
             "(Loads:%i Stores:%i)\n", squashed_num, loadQueue.size(),
             storeQueue.size());
 
@@ -1162,6 +1199,9 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
 {
     iewStage->wakeCPU();
 
+    DPRINTF(LSQUnit, "Completing writeback for memop [sn:%llu] PC %s (load:%i)\n",
+            inst->seqNum, inst->pcState(), inst->isLoad());
+
     // Squashed instructions do not need to complete their access.
     if (inst->isSquashed()) {
         assert (!inst->isStore() || inst->isStoreConditional());
@@ -1173,9 +1213,8 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
         inst->setExecuted();
 
         if (inst->fault == NoFault) {
-            // Complete access to copy data to proper place if it isn't a poisoned load.
-            if (!(inst->isLoad() && inst->isPoisoned()))
-                inst->completeAcc(pkt);
+            // Complete access to copy data to proper place.
+            inst->completeAcc(pkt);
         } else {
             // If the instruction has an outstanding fault, we cannot complete
             // the access as this discards the current fault.
@@ -1287,6 +1326,7 @@ bool
 LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
 {
     bool success = true;
+    bool rcSuccess = false;
     bool cache_got_blocked = false;
 
     LSQRequest *request = dynamic_cast<LSQRequest*>(data_pkt->senderState);
@@ -1294,20 +1334,8 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
     DPRINTF(LSQUnit, "Attempting to send packet (Addr %#x) to cache. load: %d\n",
             data_pkt->getAddr(), isLoad);
 
-    /**
-     * If in runahead, try to send to runahead cache.
-     * If the packet is a store, this will always succeed.
-     * If it is a load that misses, the load must retry in normal cache.
-     */
-    bool rcSuccess = false;
-    if (request->isRunahead()) {
-        // If this doesn't succeed the request will "retry" by being sent to real cache
-        rcSuccess = lsq->sendToRunaheadCache(data_pkt);
-        if (!rcSuccess)
-            DPRINTF(RunaheadLSQ, "Packet failed in R-cache, sending to real cache.\n");
-    }
-
-    if (!rcSuccess || !request->isRunahead()) {
+    // Everything goes to real cache except runahead stores
+    if (!request->isRunahead() || isLoad) {
         if (!lsq->cacheBlocked() &&
             lsq->cachePortAvailable(isLoad)) {
             if (!dcachePort->sendTimingReq(data_pkt)) {
@@ -1323,9 +1351,20 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
         if (!isLoad) {
             isStoreBlocked = false;
         }
-        if (!rcSuccess)
-            lsq->cachePortBusy(isLoad);
+        lsq->cachePortBusy(isLoad);
         request->packetSent();
+
+        /**
+         * If in runahead, try to send to runahead cache in parallel with the D-cache access.
+         * If the packet is a store, this will always succeed.
+         * If the packet is a load that hits in R-cache,
+         * we will use that result and ignore the D-cache result.
+         */
+        if (request->isRunahead()) {
+            DPRINTF(RunaheadLSQ, "Packet was successfully sent to D-cache in runahead, "
+                                 "attempting to send to R-cache.\n");
+            rcSuccess = lsq->sendToRunaheadCache(data_pkt);
+        }
     } else {
         if (cache_got_blocked) {
             lsq->cacheBlocked(true);
@@ -1337,10 +1376,13 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
         }
         request->packetNotSent();
     }
+
     DPRINTF(LSQUnit, "Memory request (pkt: %s) from inst [sn:%llu] was"
-            " %ssent (cache is blocked: %d, cache_got_blocked: %d)\n",
+            " %ssent%s (cache is blocked: %d, cache_got_blocked: %d)\n",
             data_pkt->print(), request->instruction()->seqNum,
-            success ? "": "not ", lsq->cacheBlocked(), cache_got_blocked);
+            success ? "": "not ",  rcSuccess ? " (to R-cache, too)" : "",
+            lsq->cacheBlocked(), cache_got_blocked);
+
     return success;
 }
 
@@ -1503,9 +1545,11 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
         // Cache maintenance instructions go down via the store
         // path but they carry no data and they shouldn't be
         // considered for forwarding
+        // Runahead stores should not forward to normal instructions either
         if (store_size != 0 && !store_it->instruction()->strictlyOrdered() &&
             !(store_it->request()->mainReq() &&
-              store_it->request()->mainReq()->isCacheMaintenance())) {
+              store_it->request()->mainReq()->isCacheMaintenance()) &&
+            !(store_it->instruction()->isRunahead() && !load_inst->isRunahead())) {
             assert(store_it->instruction()->effAddrValid());
 
             // Check if the store data is within the lower and upper bounds of
@@ -1621,6 +1665,11 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
 
                 // Check if the store is poisoned. If so, the poison is forwarded to the load.
                 if (store_it->instruction()->isPoisoned()) {
+                    DPRINTF(RunaheadLSQ, "[sn:%llu] PC %s Load was poisoned by forwarded store "
+                                         "with sn:%llu\n",
+                                         load_inst->seqNum, load_inst->pcState(),
+                                         store_it->instruction()->seqNum);
+                    assert(cpu->inRunahead(load_inst->threadNumber));
                     load_inst->setPoisoned();
                     ++stats.forwardedPoisons;
                 }
@@ -1641,13 +1690,23 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
                 ++stats.forwLoads;
 
                 return NoFault;
-            } else if (
-                    coverage == AddrRangeCoverage::PartialAddrRangeCoverage) {
+            } else if (coverage == AddrRangeCoverage::PartialAddrRangeCoverage) {
                 // If it's already been written back, then don't worry about
                 // stalling on it.
                 if (store_it->completed()) {
                     panic("Should not check one of these");
                     continue;
+                }
+
+                // Stores may forward poison even on partial coverage
+                if (store_it->instruction()->isPoisoned()) {
+                    DPRINTF(RunaheadLSQ, "[sn:%llu] PC %s Load was poisoned by forwarded store "
+                                         "with partial coverage. Store sn:%llu\n",
+                                         load_inst->seqNum, load_inst->pcState(),
+                                         store_it->instruction()->seqNum);
+                    assert(cpu->inRunahead(load_inst->threadNumber));
+                    load_inst->setPoisoned();
+                    ++stats.forwardedPoisons;
                 }
 
                 // Must stall load and force it to retry, so long as it's the

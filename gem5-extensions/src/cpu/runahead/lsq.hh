@@ -226,6 +226,10 @@ class LSQ
             Runahead            = 0x00008000,
             /** Set if the request contains poisoned data */
             Poisoned            = 0x00010000,
+            /** Set if the request was sent to runahead cache and a response is expected */
+            RCacheExpected      = 0x00020000,
+            /** Set when the request currently contains a response from runahead cache */
+            RCacheResponding     = 0x00040000,
         };
         FlagsType flags;
 
@@ -564,6 +568,14 @@ class LSQ
 
         void setRunahead() { flags.set(Flag::Runahead); };
         bool isRunahead() { return flags.isSet(Flag::Runahead); };
+
+        void setRCacheExpected() { flags.set(Flag::RCacheExpected); };
+        // void clearRCacheExpected() { flags.clear(Flag::RCacheExpected); };
+        bool rCacheExpected() { return flags.isSet(Flag::RCacheExpected); };
+
+        void setRCacheResponding() { flags.set(Flag::RCacheResponding); };
+        void clearRCacheResponding() { flags.clear(Flag::RCacheResponding); };
+        bool rCacheResponding() { return flags.isSet(Flag::RCacheResponding); };
 
         void setPoisoned() { flags.set(Flag::Poisoned); };
         bool isPoisoned() { return flags.isSet(Flag::Poisoned); };
@@ -907,6 +919,9 @@ class LSQ
 
     /** Set the runahead cache pointer */
     void setRunaheadCache(RunaheadCache *cache);
+
+    /** Forge a writeback for the given instruction */
+    void forgeResponse(const DynInstPtr &inst);
 
   protected:
     /** D-cache is blocked */

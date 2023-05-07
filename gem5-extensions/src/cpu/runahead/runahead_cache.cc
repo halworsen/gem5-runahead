@@ -53,8 +53,8 @@ RunaheadCache::lookup(Addr addr)
     uint64_t idx = getIndex(addr);
     CacheBlock block = cacheEntries[idx];
 
-    DPRINTF(RCache, "R-cache lookup on block %llu (addr %#x). Tag match: %i, valid: %i\n",
-            idx, align(addr), (block.tag == getTag(addr)), block.valid);
+    DPRINTF(RCache, "R-cache lookup on block %llu (addr %#x). Tag: %i, valid: %i, poisoned: %i\n",
+            idx, align(addr), (block.tag == getTag(addr)), block.valid, block.poisoned);
 
     ++rcacheStats.lookups;
     return ((block.tag == getTag(addr)) && block.valid);
@@ -65,11 +65,11 @@ RunaheadCache::write(PacketPtr pkt)
 {
     assert(pkt->isWrite());
 
-    DPRINTF(RCache, "Performing R-cache write to block at addr %#x (unaligned %#x)\n",
-            align(pkt->getAddr()), pkt->getAddr());
     Addr addr = pkt->getAddr();
+    DPRINTF(RCache, "Performing R-cache write to block %llu (addr %#x, unaligned %#x).",
+            getIndex(addr), align(addr), addr);
 
-    CacheBlock block = cacheEntries[getIndex(addr)];
+    CacheBlock &block = cacheEntries[getIndex(addr)];
     if ((block.tag != getTag(addr)) && block.valid) {
         DPRINTF(RCache, "Write conflicted. Evicting old entry by overwrite. "
                         "old tag: %#x poisoned: %i\n", block.tag, block.poisoned);
@@ -81,15 +81,15 @@ RunaheadCache::write(PacketPtr pkt)
 
     block.tag = getTag(addr);
     block.valid = true;
-
     block.poisoned = false;
+    ++rcacheStats.writes;
+
     LSQRequest *req = dynamic_cast<LSQRequest*>(pkt->senderState);
     if (req->isPoisoned()) {
+        DPRINTF(RCache, "Write was poisoned. Poisoning cache block.\n");
         block.poisoned = true;
-        
+        ++rcacheStats.poisonedWrites;
     }
-
-    ++rcacheStats.writes;
 
     uint8_t *pkt_data = block.data + pkt->getOffset(blockSize);
     pkt->writeDataToBlock(block.data, blockSize);
@@ -102,12 +102,12 @@ RunaheadCache::read(PacketPtr pkt)
 {
     assert(pkt->isRead());
 
-    DPRINTF(RCache, "Performing R-cache read of block at addr %#x (unaligned %#x)\n",
-            align(pkt->getAddr()), pkt->getAddr());
     Addr addr = pkt->getAddr();
+    DPRINTF(RCache, "Performing R-cache read of block %llu (addr %#x, unaligned %#x)\n",
+            getIndex(addr), align(addr), addr);
+    
     if (!lookup(addr)) {
         DPRINTF(RCache, "Tag lookup failed or block was invalid.\n");
-
         ++rcacheStats.readMisses;
         return nullptr;
     }
@@ -118,6 +118,7 @@ RunaheadCache::read(PacketPtr pkt)
 
     if (block.poisoned) {
         LSQRequest *req = dynamic_cast<LSQRequest*>(pkt->senderState);
+        DPRINTF(RCache, "Cache block was poisoned, marking request as poisoned.\n");
         req->setPoisoned();
     }
 
@@ -131,7 +132,7 @@ RunaheadCache::poisonblock(Addr addr)
     CacheBlock block = cacheEntries[getIndex(addr)];
     if (block.tag == getTag(addr))
         block.poisoned = true;
-    
+
     ++rcacheStats.poisons;
 }
 
@@ -167,9 +168,11 @@ RunaheadCache::handlePacket(PacketPtr pkt)
         panic("RE cache doesn't know what to do with packet of cmd type %s!!\n", pkt->cmdString());
     }
 
-    // Convert the packet into a response if needed
-    if (success && pkt->needsResponse())
-        pkt->makeResponse();
+    if (success) {
+        // Convert the packet into a response if needed
+        if (pkt->needsResponse())
+            pkt->makeResponse();
+    }
 
     return success;
 }
@@ -195,7 +198,7 @@ RunaheadCache::RCacheStats::RCacheStats(statistics::Group *parent)
       ADD_STAT(invalidations, statistics::units::Count::get(),
            "Total amount of times the R-cache was invalidated"),
       ADD_STAT(packetsHandled, statistics::units::Count::get(),
-           "Total amount of packets served by the R-cache")
+           "Total amount of packets served by runahead cache")
 {
     lookups.prereq(lookups);
     writes.prereq(writes);

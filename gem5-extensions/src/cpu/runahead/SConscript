@@ -61,15 +61,18 @@ if env['CONF']['TARGET_ISA'] != 'null':
     DebugFlag('RunaheadRename')
     DebugFlag('RunaheadCheckpoint')
     DebugFlag('RunaheadLSQ')
+    DebugFlag('RunaheadIQ')
     DebugFlag('RunaheadFetch')
     DebugFlag('RunaheadCommit')
     DebugFlag('RunaheadIEW')
+    DebugFlag('RunaheadROB')
     DebugFlag('RCache')
 
     CompoundFlag('Runahead', [
         'RunaheadCPU', 'RunaheadFetch', 'RunaheadRename',
-        'RunaheadCheckpoint', 'RunaheadLSQ', 'RunaheadCommit',
-        'RunaheadIEW', 'RCache',
+        'RunaheadCheckpoint', 'RunaheadLSQ', 'RunaheadIQ',
+        'RunaheadCommit', 'RunaheadIEW', 'RunaheadROB',
+        'RCache',
     ])
 
     SimObject('BaseRunaheadChecker.py', sim_objects=['BaseRunaheadChecker'])

@@ -170,27 +170,28 @@ class PhysRegFile
         const RegClassType type = phys_reg->classValue();
         const RegIndex idx = phys_reg->index();
 
+        const char *poisoned = poisonedRegs[phys_reg->flatIndex()] ? " poisoned" : "";
         RegVal val;
         switch (type) {
           case IntRegClass:
             val = intRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to int register %i, has data %#x\n",
-                    idx, val);
+            DPRINTF(IEW, "RegFile: Access to int register %i, has%s data %#x\n",
+                    idx, poisoned, val);
             return val;
           case FloatRegClass:
             val = floatRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to float register %i has data %#x\n",
-                    idx, val);
+            DPRINTF(IEW, "RegFile: Access to float register %i, has %s data %#x\n",
+                    idx, poisoned, val);
             return val;
           case VecElemClass:
             val = vectorElemRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to vector element register %i "
-                    "has data %#x\n", idx, val);
+            DPRINTF(IEW, "RegFile: Access to vector element register %i, has %s data %#x\n",
+                    idx, poisoned, val);
             return val;
           case CCRegClass:
             val = ccRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to cc register %i has data %#x\n",
-                    idx, val);
+            DPRINTF(IEW, "RegFile: Access to cc register %i, has %s data %#x\n",
+                    idx, poisoned, val);
             return val;
           default:
             panic("Unsupported register class type %d.", type);
@@ -319,6 +320,8 @@ class PhysRegFile
     bool
     regPoisoned(PhysRegIdPtr physReg)
     {
+        if (physReg->classValue() == InvalidRegClass)
+            return false;
         const RegIndex idx = physReg->flatIndex();
         return poisonedRegs[idx];
     }
@@ -327,6 +330,8 @@ class PhysRegFile
     void
     regPoisoned(PhysRegIdPtr physReg, bool poisoned)
     {
+        if (physReg->classValue() == InvalidRegClass)
+            return;
         const RegIndex idx = physReg->flatIndex();
         poisonedRegs[idx] = poisoned;
     }

@@ -229,15 +229,25 @@ LSQ::sendToRunaheadCache(PacketPtr pkt)
                          "Scheduling response.\n",
                          pkt->getAddr(), pkt->isRead());
 
+    LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
+    // The request should now expect an additional packet from Rcache
+    request->_numOutstandingPackets++;
+    request->setRCacheExpected();
+
     // Schedule a fake timing response immediately
     // *technically* a cache port should receive it but dcache just forwards the response
     // to the LSQ anyways
     EventFunctionWrapper *event = new EventFunctionWrapper(
         [this, pkt]() {
-            DPRINTF(RunaheadLSQ, "Scheduled runahead cache response arriving.\n");
+            DPRINTF(RunaheadLSQ, "Runahead cache response arriving.\n");
+            // hacky: update request to indicate that this is a response from Rcache
+            // this will be cleared immediately after the data access completes
+            LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
+            request->setRCacheResponding();
             recvTimingResp(pkt);
         },
         csprintf("reCachePktResp.%#x", pkt->getAddr()), true);
+    // RETODO: make rcache delay configurable
     cpu->schedule(event, curTick() + 1);
 
     return true;
@@ -251,6 +261,12 @@ LSQ::setRunaheadCache(RunaheadCache *cache)
     // for (LSQUnit &unit : thread) {
     //     unit.setRunaheadCache(cache);
     // }
+}
+
+void
+LSQ::forgeResponse(const DynInstPtr &inst)
+{
+    thread[inst->threadNumber].forgeResponse(inst);
 }
 
 void
@@ -466,6 +482,7 @@ LSQ::recvTimingResp(PacketPtr pkt)
             thread[tid].checkSnoop(pkt);
         }
     }
+
     // Update the LSQRequest state (this may delete the request)
     request->packetReplied();
 
@@ -877,6 +894,8 @@ LSQ::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
     // And poison if the instruction is a poisoned store
     if (inst->isStore() && inst->isPoisoned()) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] is a poisoned store. Marking request as poisoned.\n",
+                inst->seqNum);
         request->setPoisoned();
     }
 
@@ -1236,7 +1255,14 @@ LSQ::SplitDataRequest::markAsStaleTranslation()
 bool
 LSQ::SingleDataRequest::recvTimingResp(PacketPtr pkt)
 {
-    assert(_numOutstandingPackets == 1);
+    LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
+    // If the request was sent to runahead cache we expect 2 packets, otherwise just 1
+    if (request->rCacheExpected()) {
+        assert(_numOutstandingPackets >= 1 && _numOutstandingPackets <= 2);
+    } else {
+        assert(_numOutstandingPackets == 1);
+    }
+    
     flags.set(Flag::Complete);
     assert(pkt == _packets.front());
     _port.completeDataAccess(pkt);
@@ -1372,7 +1398,7 @@ LSQ::SingleDataRequest::sendPacketToCache()
 {
     assert(_numOutstandingPackets == 0);
     if (lsqUnit()->trySendPacket(isLoad(), _packets.at(0)))
-        _numOutstandingPackets = 1;
+        _numOutstandingPackets++;
 }
 
 void

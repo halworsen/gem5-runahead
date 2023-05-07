@@ -393,9 +393,6 @@ private:
     /** Whether or not runahead is enabled */
     bool runaheadEnabled;
 
-    /** The instruction that caused us to enter runahead mode */
-    DynInstPtr runaheadCause[MaxThreads];
-
     /** Tracks which threads are in runahead */
     bool runaheadStatus[MaxThreads];
 
@@ -406,11 +403,17 @@ private:
     bool archSquashPending[MaxThreads];
 
 public:
+    /** The instruction that caused us to enter runahead mode */
+    DynInstPtr runaheadCause[MaxThreads];
+
     /** Enter runahead, starting from the instruction at the head of the ROB */
     void enterRunahead(ThreadID tid);
 
     /** Exit runahead, resuming from the instruction that caused us to enter runahead */
     void exitRunahead(ThreadID tid);
+
+    /** Unblock a long latency load at the head of the ROB */
+    void handleRunaheadLLL(const DynInstPtr &inst);
 
     /** Restore the CPU's architectural state to the last checkpoint */
     void restoreCheckpointState(ThreadID tid);

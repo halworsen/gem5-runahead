@@ -49,6 +49,7 @@
 #include "cpu/runahead/fu_pool.hh"
 #include "cpu/runahead/limits.hh"
 #include "debug/IQ.hh"
+#include "debug/RunaheadIQ.hh"
 #include "enums/OpClass.hh"
 #include "params/BaseRunaheadCPU.hh"
 #include "sim/core.hh"
@@ -794,6 +795,22 @@ InstructionQueue::scheduleReadyInsts()
 
         assert(issuing_inst->seqNum == (*order_it).oldestInst);
 
+        // If in runahead, check if any source regs are poisoned
+        if (issuing_inst->isRunahead()) {
+            for (int idx = 0; idx < issuing_inst->numSrcRegs(); idx++) {
+                PhysRegIdPtr reg = issuing_inst->renamedSrcIdx(idx);
+                // If so, poison the instruction
+                if (cpu->regPoisoned(reg)) {
+                    DPRINTF(RunaheadIQ, "[sn:%llu] Issuing instruction (PC %s) "
+                                        "was poisoned by source reg %i (flat: %i) (type: %s)\n",
+                                        issuing_inst->seqNum, issuing_inst->pcState(),
+                                        idx, reg->flatIndex(), reg->className());
+                    issuing_inst->setPoisoned();
+                    break;
+                }
+            }
+        }
+
         if (issuing_inst->isSquashed()) {
             readyInsts[op_class].pop();
 
@@ -957,14 +974,6 @@ InstructionQueue::commit(const InstSeqNum &inst, ThreadID tid)
         ++iq_it;
         DynInstPtr inst = instList[tid].front();
         instList[tid].pop_front();
-
-        // Poisoned insts may commit before they are executed.
-        // If so, we must free their slot in the IQ.
-        if (inst->isPoisoned() && inst->isIssued()) {
-            ++freeEntries;
-            count[tid]--;
-            inst->clearInIQ();
-        }
     }
 
     assert(freeEntries == (numEntries - countInsts()));

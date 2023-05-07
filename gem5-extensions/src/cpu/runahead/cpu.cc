@@ -1110,19 +1110,28 @@ CPU::verifyMemoryMode() const
 RegVal
 CPU::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 {
-    return isa[tid]->readMiscRegNoEffect(misc_reg);
+    RegVal val = isa[tid]->readMiscRegNoEffect(misc_reg);
+    // NSE = No Side-Effect
+    DPRINTF(O3CPU, "[NSE] access to misc reg %i, has data %#x\n",
+            misc_reg, val);
+    return val;
 }
 
 RegVal
 CPU::readMiscReg(int misc_reg, ThreadID tid)
 {
     cpuStats.miscRegfileReads++;
-    return isa[tid]->readMiscReg(misc_reg);
+    RegVal val = isa[tid]->readMiscReg(misc_reg);
+    DPRINTF(O3CPU, "Access to misc reg %i, has data %#x\n",
+            misc_reg, val);
+    return val;
 }
 
 void
 CPU::setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid)
 {
+    DPRINTF(O3CPU, "[NSE] Setting misc reg %i to %#x\n",
+            misc_reg, val);
     isa[tid]->setMiscRegNoEffect(misc_reg, val);
 }
 
@@ -1130,6 +1139,8 @@ void
 CPU::setMiscReg(int misc_reg, RegVal val, ThreadID tid)
 {
     cpuStats.miscRegfileWrites++;
+    DPRINTF(O3CPU, "Setting misc reg %i to %#x\n",
+            misc_reg, val);
     isa[tid]->setMiscReg(misc_reg, val);
 }
 
@@ -1557,12 +1568,28 @@ CPU::enterRunahead(ThreadID tid)
     // Store the instruction that caused entry into runahead
     runaheadCause[tid] = robHead;
 
-    // Poison the LLL. This will cause commit to retire it immediately
-    robHead->setPoisoned();
+    /** 
+      * Mark all in-flight instructions as runahead
+      * Note that it is not enough to mark all ROB instructions as runahead
+      * Some instructions may be in frontend buffers or commited stores,
+      * and we need to mark the entire instruction window
+      */
+    for (DynInstPtr inst : instList) {
+        if (inst->threadNumber == tid) {
+            DPRINTF(RunaheadCPU, "[tid:%i] Marking instruction [sn:%llu] PC %s as runahead\n",
+                    tid, inst->seqNum, inst->pcState());
+            inst->setRunahead();
 
-    // Mark all in-flight instructions as runahead
-    // This will also take care of the ROB head, which is why we only manually set poison above
-    rob.startRunahead(tid);
+            if (inst->hasRequest() && inst->savedRequest != nullptr) {
+            DPRINTF(RunaheadCPU, "[tid:%i] Inst [sn:%llu] had request, marking it as runahead\n",
+                    tid, inst->seqNum);
+                inst->savedRequest->setRunahead();
+            }
+        }
+    }
+
+    // Poison the LLL and "execute" it so it can drain out.
+    handleRunaheadLLL(robHead);
 
     instsPseudoretired = 0;
     cpuStats.runaheadPeriods++;
@@ -1588,6 +1615,19 @@ CPU::exitRunahead(ThreadID tid)
 }
 
 void
+CPU::handleRunaheadLLL(const DynInstPtr &inst)
+{
+    assert(inst->isLoad() && inst->hasRequest());
+
+    // Poison the LLL, mark it as executed
+    inst->setPoisoned();
+    inst->setExecuted();
+
+    // Have the LSQ forge a response for the LLL
+    iew.ldstQueue.forgeResponse(inst);
+}
+
+void
 CPU::restoreCheckpointState(ThreadID tid)
 {
     DPRINTF(RunaheadCPU, "[tid:%i] Restoring architectural state after runahead squash.\n", tid);
@@ -1607,9 +1647,8 @@ CPU::instCausedRunahead(const DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
     // The thread isn't even running ahead
-    if (!inRunahead(tid)) {
+    if (!inRunahead(tid))
         return false;
-    }
 
     return inst == runaheadCause[tid];
 }
@@ -1617,8 +1656,11 @@ CPU::instCausedRunahead(const DynInstPtr &inst)
 void
 CPU::updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst)
 {
+    if (!runaheadEnabled)
+        return;
     // Arch state checkpointing should never occur in runahead
-    assert(!inRunahead(tid));
+    assert(!inRunahead(tid) && !isArchSquashPending(tid));
+
     DPRINTF(RunaheadCheckpoint, "[tid:%i] [sn:%llu] Update arch checkpoint to PC %s\n",
                                 tid, inst->seqNum, inst->pcState());
 
@@ -1689,13 +1731,6 @@ CPU::regPoisoned(PhysRegIdPtr physReg, bool poisoned)
     regFile.regPoisoned(physReg, poisoned);
 }
 
-/*
-void
-CPU::wakeDependents(const DynInstPtr &inst)
-{
-    iew.wakeDependents(inst);
-}
-*/
 void
 CPU::wakeCPU()
 {
