@@ -68,7 +68,8 @@ int main(int argc, char *argv[]) {
     int matrixSize = std::stoi(std::string(argv[1]));
     printf("Matrix size: %ix%i\n", matrixSize, matrixSize);
 
-    std::srand((unsigned) time(NULL));
+    unsigned int seed = 85354712; // time(NULL)
+    std::srand(seed);
 
     Matrix matrixA = Matrix(matrixSize, matrixSize);
     Matrix matrixB = Matrix(matrixSize, matrixSize);
