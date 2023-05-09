@@ -1579,12 +1579,6 @@ CPU::enterRunahead(ThreadID tid)
             DPRINTF(RunaheadCPU, "[tid:%i] Marking instruction [sn:%llu] PC %s as runahead\n",
                     tid, inst->seqNum, inst->pcState());
             inst->setRunahead();
-
-            if (inst->hasRequest() && inst->savedRequest != nullptr) {
-            DPRINTF(RunaheadCPU, "[tid:%i] Inst [sn:%llu] had request, marking it as runahead\n",
-                    tid, inst->seqNum);
-                inst->savedRequest->setRunahead();
-            }
         }
     }
 

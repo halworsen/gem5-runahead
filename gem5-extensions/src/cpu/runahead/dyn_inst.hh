@@ -855,7 +855,13 @@ class DynInst : public ExecContext, public RefCounted
     bool isPoisoned() const { return instFlags[Poisoned]; }
 
     /** Marks this instruction as a runahead instruction */
-    void setRunahead() { instFlags.set(Runahead); }
+    void
+    setRunahead()
+    {
+        instFlags.set(Runahead);
+        if (hasRequest() && savedRequest != nullptr)
+            savedRequest->setRunahead();
+    }
 
     /** Returns whether or not this instruction is a runahead instruction */
     bool isRunahead() const { return instFlags[Runahead]; }
