@@ -175,23 +175,23 @@ class PhysRegFile
         switch (type) {
           case IntRegClass:
             val = intRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to int register %i, has%s data %#x\n",
-                    idx, poisoned, val);
+            DPRINTF(IEW, "RegFile: Access to %sint register %i, has%s data %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, poisoned, val);
             return val;
           case FloatRegClass:
             val = floatRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to float register %i, has %s data %#x\n",
-                    idx, poisoned, val);
+            DPRINTF(IEW, "RegFile: Access to %sfloat register %i, has %s data %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, poisoned, val);
             return val;
           case VecElemClass:
             val = vectorElemRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to vector element register %i, has %s data %#x\n",
-                    idx, poisoned, val);
+            DPRINTF(IEW, "RegFile: Access to %svector element register %i, has %s data %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, poisoned, val);
             return val;
           case CCRegClass:
             val = ccRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to cc register %i, has %s data %#x\n",
-                    idx, poisoned, val);
+            DPRINTF(IEW, "RegFile: Access to %scc register %i, has %s data %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, poisoned, val);
             return val;
           default:
             panic("Unsupported register class type %d.", type);
@@ -213,16 +213,18 @@ class PhysRegFile
             break;
           case VecRegClass:
             vectorRegFile.get(idx, val);
-            DPRINTF(IEW, "RegFile: Access to vector register %i, has "
-                    "data %s\n", idx, vectorRegFile.regClass.valString(val));
+            DPRINTF(IEW, "RegFile: Access to %svector register %i, has data %s\n",
+                    isChkpt ? "checkpoint " : "", idx,
+                    vectorRegFile.regClass.valString(val));
             break;
           case VecElemClass:
             *(RegVal *)val = getReg(phys_reg);
             break;
           case VecPredRegClass:
             vecPredRegFile.get(idx, val);
-            DPRINTF(IEW, "RegFile: Access to predicate register %i, has "
-                    "data %s\n", idx, vecPredRegFile.regClass.valString(val));
+            DPRINTF(IEW, "RegFile: Access to %spredicate register %i, has data %s\n",
+                    isChkpt ? "checkpoint " : "", idx,
+                    vecPredRegFile.regClass.valString(val));
             break;
           case CCRegClass:
             *(RegVal *)val = getReg(phys_reg);
@@ -259,23 +261,23 @@ class PhysRegFile
             break;
           case IntRegClass:
             intRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting int register %i to %#x\n",
-                    idx, val);
+            DPRINTF(IEW, "RegFile: Setting %sint register %i to %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, val);
             break;
           case FloatRegClass:
             floatRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting float register %i to %#x\n",
-                    idx, val);
+            DPRINTF(IEW, "RegFile: Setting %sfloat register %i to %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, val);
             break;
           case VecElemClass:
             vectorElemRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting vector element register %i to "
-                    "%#x\n", idx, val);
+            DPRINTF(IEW, "RegFile: Setting %svector element register %i to %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, val);
             break;
           case CCRegClass:
             ccRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting cc register %i to %#x\n",
-                    idx, val);
+            DPRINTF(IEW, "RegFile: Setting %scc register %i to %#x\n",
+                    isChkpt ? "checkpoint " : "", idx, val);
             break;
           default:
             panic("Unsupported register class type %d.", type);
@@ -296,16 +298,18 @@ class PhysRegFile
             setReg(phys_reg, *(RegVal *)val);
             break;
           case VecRegClass:
-            DPRINTF(IEW, "RegFile: Setting vector register %i to %s\n",
-                    idx, vectorRegFile.regClass.valString(val));
+            DPRINTF(IEW, "RegFile: Setting %svector register %i to %s\n",
+                    isChkpt ? "checkpoint " : "", idx,
+                    vectorRegFile.regClass.valString(val));
             vectorRegFile.set(idx, val);
             break;
           case VecElemClass:
             setReg(phys_reg, *(RegVal *)val);
             break;
           case VecPredRegClass:
-            DPRINTF(IEW, "RegFile: Setting predicate register %i to %s\n",
-                    idx, vectorRegFile.regClass.valString(val));
+            DPRINTF(IEW, "RegFile: Setting %spredicate register %i to %s\n",
+                    isChkpt ? "checkpoint " : "", idx,
+                    vectorRegFile.regClass.valString(val));
             vecPredRegFile.set(idx, val);
             break;
           case CCRegClass:
@@ -359,6 +363,12 @@ class PhysRegFile
      * the pointer out of just class and register idx.
      */
     PhysRegIdPtr getTrueId(PhysRegIdPtr reg);
+
+    /**
+     * Whether or not this register file is an architectural checkpoint file.
+     * Mostly just affects debug logging.
+     */
+    bool isChkpt = false;
 };
 
 } // namespace runahead

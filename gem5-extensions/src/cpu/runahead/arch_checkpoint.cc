@@ -25,6 +25,8 @@ ArchCheckpoint::ArchCheckpoint(CPU *cpu, const BaseRunaheadCPUParams &params) :
 {
     fatal_if(params.numThreads > 1, "Architectural state checkpointing is not supported with SMT\n");
 
+    regFile.isChkpt = true;
+
     const BaseISA::RegClasses &regClasses = params.isa[0]->regClasses();
 
     // setup the list of starting flat indices for all register types
