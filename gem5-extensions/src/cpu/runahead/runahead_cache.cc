@@ -1,4 +1,5 @@
 #include "cpu/runahead/runahead_cache.hh"
+#include "cpu/runahead/dyn_inst.hh"
 #include "cpu/runahead/lsq.hh"
 #include "base/intmath.hh"
 #include "base/trace.hh"
@@ -18,7 +19,7 @@ RunaheadCache::RunaheadCache(statistics::Group *statsParent, uint64_t size, uint
     // instead of pow2
     indexMask((1 << ceilLog2(numBlocks)) - 1),
     tagShift(indexShift + ceilLog2(numBlocks)),
-    rcacheStats(statsParent)
+    rCacheStats(statsParent)
 {
     // not a disaster since we use ceiling log2, but it does lead to some wasted bit real estate
     warn_if(!isPowerOf2(numBlocks), "Amount of runahead cache blocks should be a power of 2! Check cache size.\n");
@@ -56,7 +57,7 @@ RunaheadCache::lookup(Addr addr)
     DPRINTF(RCache, "R-cache lookup on block %llu (addr %#x). Tag: %i, valid: %i, poisoned: %i\n",
             idx, align(addr), (block.tag == getTag(addr)), block.valid, block.poisoned);
 
-    ++rcacheStats.lookups;
+    ++rCacheStats.lookups;
     return ((block.tag == getTag(addr)) && block.valid);
 }
 
@@ -74,21 +75,21 @@ RunaheadCache::write(PacketPtr pkt)
         DPRINTF(RCache, "Write conflicted. Evicting old entry by overwrite. "
                         "old tag: %#x poisoned: %i\n", block.tag, block.poisoned);
 
-        ++rcacheStats.writeConflicts;
+        ++rCacheStats.writeConflicts;
         if (block.poisoned)
-            ++rcacheStats.writeCleanses;
+            ++rCacheStats.writeCleanses;
     }
 
     block.tag = getTag(addr);
     block.valid = true;
     block.poisoned = false;
-    ++rcacheStats.writes;
+    ++rCacheStats.writes;
 
     LSQRequest *req = dynamic_cast<LSQRequest*>(pkt->senderState);
     if (req->isPoisoned()) {
         DPRINTF(RCache, "Write was poisoned. Poisoning cache block.\n");
         block.poisoned = true;
-        ++rcacheStats.poisonedWrites;
+        ++rCacheStats.poisonedWrites;
     }
 
     uint8_t *pkt_data = block.data + pkt->getOffset(blockSize);
@@ -105,14 +106,14 @@ RunaheadCache::read(PacketPtr pkt)
     Addr addr = pkt->getAddr();
     DPRINTF(RCache, "Performing R-cache read of block %llu (addr %#x, unaligned %#x)\n",
             getIndex(addr), align(addr), addr);
-    
+
     if (!lookup(addr)) {
         DPRINTF(RCache, "Tag lookup failed or block was invalid.\n");
-        ++rcacheStats.readMisses;
+        ++rCacheStats.readMisses;
         return nullptr;
     }
 
-    ++rcacheStats.readHits;
+    ++rCacheStats.readHits;
     CacheBlock block = cacheEntries[getIndex(addr)];
     pkt->setDataFromBlock(block.data, blockSize);
 
@@ -126,14 +127,14 @@ RunaheadCache::read(PacketPtr pkt)
 }
 
 void
-RunaheadCache::poisonblock(Addr addr)
+RunaheadCache::poisonBlock(Addr addr)
 {
     DPRINTF(RCache, "R-cache poisoning block %#x\n", align(addr));
     CacheBlock block = cacheEntries[getIndex(addr)];
     if (block.tag == getTag(addr))
         block.poisoned = true;
 
-    ++rcacheStats.poisons;
+    ++rCacheStats.poisons;
 }
 
 void
@@ -145,36 +146,39 @@ RunaheadCache::invalidateCache()
         block.poisoned = false;
     }
 
-    ++rcacheStats.invalidations;
+    ++rCacheStats.invalidations;
 }
 
-bool
+PacketPtr
 RunaheadCache::handlePacket(PacketPtr pkt)
 {
     DPRINTF(RCache, "R-cache received packet (addr %#x). Read: %i\n",
             pkt->getAddr(), pkt->isRead());
+    ++rCacheStats.packetsHandled;
 
-    ++rcacheStats.packetsHandled;
-
-    bool success = true;
-    if (pkt->isWrite()) {
-        write(pkt);
-    } else if (pkt->isRead()) {
-        uint8_t *data = read(pkt);
+    PacketPtr respPkt = new Packet(*pkt);
+    if (respPkt->isWrite()) {
+        write(respPkt);
+    } else if (respPkt->isRead()) {
+        uint8_t *data = read(respPkt);
         // Lookup failed
-        if (data == nullptr)
-            success = false;
+        if (data == nullptr) {
+            delete respPkt;
+            return nullptr;
+        }
     } else {
-        panic("RE cache doesn't know what to do with packet of cmd type %s!!\n", pkt->cmdString());
+        panic("RE cache doesn't know what to do with packet of cmd type %s!!\n", respPkt->cmdString());
     }
 
-    if (success) {
+    if (respPkt != nullptr) {
         // Convert the packet into a response if needed
-        if (pkt->needsResponse())
-            pkt->makeResponse();
+        if (respPkt->needsResponse()) {
+            respPkt->makeResponse();
+            assert(!respPkt->needsResponse());
+        }
     }
 
-    return success;
+    return respPkt;
 }
 
 RunaheadCache::RCacheStats::RCacheStats(statistics::Group *parent)

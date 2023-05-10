@@ -226,10 +226,6 @@ class LSQ
             Runahead            = 0x00008000,
             /** Set if the request contains poisoned data */
             Poisoned            = 0x00010000,
-            /** Set if the request was sent to runahead cache and a response is expected */
-            RCacheExpected      = 0x00020000,
-            /** Set when the request currently contains a response from runahead cache */
-            RCacheResponding     = 0x00040000,
         };
         FlagsType flags;
 
@@ -259,6 +255,7 @@ class LSQ
         std::vector<PacketPtr> _packets;
         std::vector<RequestPtr> _reqs;
         std::vector<Fault> _fault;
+        std::vector<PacketPtr> _rCachePackets;
         uint64_t* _res;
         const Addr _addr;
         const uint32_t _size;
@@ -375,12 +372,18 @@ class LSQ
         virtual void initiateTranslation() = 0;
 
         PacketPtr packet(int idx = 0) { return _packets.at(idx); }
+        PacketPtr rCachePacket(int idx = 0) { return _rCachePackets.at(idx); }
 
         virtual PacketPtr
         mainPacket()
         {
-            assert (_packets.size() == 1);
-            return packet();
+            if (rCacheExpected()) {
+                assert(_rCachePackets.size() == 1);
+                return rCachePacket();
+            } else {
+                assert (_packets.size() == 1);
+                return packet();
+            }
         }
 
         virtual RequestPtr
@@ -569,16 +572,31 @@ class LSQ
         void setRunahead() { flags.set(Flag::Runahead); };
         bool isRunahead() { return flags.isSet(Flag::Runahead); };
 
-        void setRCacheExpected() { flags.set(Flag::RCacheExpected); };
-        // void clearRCacheExpected() { flags.clear(Flag::RCacheExpected); };
-        bool rCacheExpected() { return flags.isSet(Flag::RCacheExpected); };
-
-        void setRCacheResponding() { flags.set(Flag::RCacheResponding); };
-        void clearRCacheResponding() { flags.clear(Flag::RCacheResponding); };
-        bool rCacheResponding() { return flags.isSet(Flag::RCacheResponding); };
-
         void setPoisoned() { flags.set(Flag::Poisoned); };
         bool isPoisoned() { return flags.isSet(Flag::Poisoned); };
+
+        void
+        pushRCachePacket(PacketPtr pkt)
+        {
+            _numOutstandingPackets++;
+            _rCachePackets.push_back(pkt);
+        }
+
+        bool
+        isRCachePacket(PacketPtr pkt)
+        {
+            // Short circuit as this is the case the vast majority of the time
+            if (GEM5_LIKELY(_rCachePackets.size() == 0))
+                return false;
+
+            for (PacketPtr rCachePkt : _rCachePackets) {
+                if (rCachePkt == pkt)
+                    return true;
+            }
+            return false;
+        }
+
+        bool rCacheExpected() { return (_rCachePackets.size() > 0); };
 
         void
         complete()
@@ -639,6 +657,7 @@ class LSQ
       protected:
         uint32_t numFragments;
         uint32_t numReceivedPackets;
+        uint32_t numReceivedRCachePackets;
         RequestPtr _mainReq;
         PacketPtr _mainPacket;
 
@@ -651,6 +670,7 @@ class LSQ
                        nullptr),
             numFragments(0),
             numReceivedPackets(0),
+            numReceivedRCachePackets(0),
             _mainReq(nullptr),
             _mainPacket(nullptr)
         {

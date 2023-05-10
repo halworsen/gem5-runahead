@@ -71,6 +71,9 @@ private:
      */
     bool lookup(Addr addr);
 
+    /** Poison a block associated with an address. Does nothing on a tag mismatch. */
+    void poisonBlock(Addr addr);
+
     /**
      * Write some data to the runahead cache.
      * Conflicts are ignored, the "eviction policy" is to simply overwrite the block.
@@ -86,14 +89,11 @@ public:
 
     ~RunaheadCache();
 
-    /** Poison a block associated with an address. Does nothing on a tag mismatch. */
-    void poisonblock(Addr addr);
-
     /** Invalidates all cache blocks. */
     void invalidateCache();
 
-    /** Process an incoming packet. */
-    bool handlePacket(PacketPtr pkt);
+    /** Process an incoming packet. Returns a copy of the packet as a response on success. */
+    PacketPtr handlePacket(PacketPtr pkt);
 
 private:
     struct RCacheStats : public statistics::Group
@@ -120,7 +120,7 @@ private:
         statistics::Scalar invalidations;
         // number of packets served by rcache
         statistics::Scalar packetsHandled;
-    } rcacheStats;
+    } rCacheStats;
 };
 
 } // namespace runahead

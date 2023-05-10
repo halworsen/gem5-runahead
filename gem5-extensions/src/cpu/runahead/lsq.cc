@@ -221,32 +221,29 @@ LSQ::cachePortBusy(bool is_load)
 bool
 LSQ::sendToRunaheadCache(PacketPtr pkt)
 {
-    bool success = runaheadCache->handlePacket(pkt);
-    if (!success)
+    LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
+    ThreadID tid = request->instruction()->threadNumber;
+    assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
+    assert(request->instruction()->isRunahead());
+
+    PacketPtr rCachePkt = runaheadCache->handlePacket(pkt);
+    if (rCachePkt == nullptr)
         return false;
 
     DPRINTF(RunaheadLSQ, "Successfully sent packet (Addr %#x) (rd:%i) to runahead cache. "
                          "Scheduling response.\n",
-                         pkt->getAddr(), pkt->isRead());
-
-    LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
-    // The request should now expect an additional packet from Rcache
-    request->_numOutstandingPackets++;
-    request->setRCacheExpected();
+                         rCachePkt->getAddr(), rCachePkt->isRead());
 
     // Schedule a fake timing response immediately
     // *technically* a cache port should receive it but dcache just forwards the response
     // to the LSQ anyways
+    request->pushRCachePacket(rCachePkt);
     EventFunctionWrapper *event = new EventFunctionWrapper(
-        [this, pkt]() {
+        [this, rCachePkt]() {
             DPRINTF(RunaheadLSQ, "Runahead cache response arriving.\n");
-            // hacky: update request to indicate that this is a response from Rcache
-            // this will be cleared immediately after the data access completes
-            LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
-            request->setRCacheResponding();
-            recvTimingResp(pkt);
+            recvTimingResp(rCachePkt);
         },
-        csprintf("reCachePktResp.%#x", pkt->getAddr()), true);
+        csprintf("reCachePktResp.%#x", rCachePkt->getAddr()), true);
     // RETODO: make rcache delay configurable
     cpu->schedule(event, curTick() + 1);
 
@@ -460,6 +457,10 @@ LSQ::recvTimingResp(PacketPtr pkt)
 
     LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
     panic_if(!request, "Got packet back with unknown sender state\n");
+
+    DPRINTF(LSQ, "[sn:%llu] Received timing response packet from %s.\n",
+            request->instruction()->seqNum,
+            request->isRCachePacket(pkt) ? "R-cache" : "D-cache");
 
     thread[cpu->contextToThread(request->contextId())].recvTimingResp(pkt);
 
@@ -1255,17 +1256,23 @@ LSQ::SplitDataRequest::markAsStaleTranslation()
 bool
 LSQ::SingleDataRequest::recvTimingResp(PacketPtr pkt)
 {
-    LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
     // If the request was sent to runahead cache we expect 2 packets, otherwise just 1
-    if (request->rCacheExpected()) {
-        assert(_numOutstandingPackets >= 1 && _numOutstandingPackets <= 2);
-    } else {
-        assert(_numOutstandingPackets == 1);
+    assert(_numOutstandingPackets >= 1 && _numOutstandingPackets <= 2);
+
+    // If packets were sent to Rcache, we only complete the request if the packet is from Rcache
+    // The Dcache packet is simply dropped
+    if (rCacheExpected()) {
+        assert(instruction()->isRunahead());
+        if (isRCachePacket(pkt)) {
+            assert(pkt == _rCachePackets.front());
+            flags.set(Flag::Complete);
+            _port.completeDataAccess(pkt);
+        }
+    } else if (!rCacheExpected()) {
+        assert(pkt == _packets.front());
+        flags.set(Flag::Complete);
+        _port.completeDataAccess(pkt);
     }
-    
-    flags.set(Flag::Complete);
-    assert(pkt == _packets.front());
-    _port.completeDataAccess(pkt);
     _hasStaleTranslation = false;
     return true;
 }
@@ -1273,25 +1280,42 @@ LSQ::SingleDataRequest::recvTimingResp(PacketPtr pkt)
 bool
 LSQ::SplitDataRequest::recvTimingResp(PacketPtr pkt)
 {
-    uint32_t pktIdx = 0;
-    while (pktIdx < _packets.size() && pkt != _packets[pktIdx])
+    if (rCacheExpected())
+        assert(instruction()->isRunahead());
+
+    std::vector<PacketPtr> packetVec = (rCacheExpected() && isRCachePacket(pkt)) ? _rCachePackets
+                                                                                 : _packets;
+
+    int32_t pktIdx = 0;
+    while (pktIdx < packetVec.size() && pkt != packetVec[pktIdx])
         pktIdx++;
-    assert(pktIdx < _packets.size());
-    numReceivedPackets++;
-    if (numReceivedPackets == _packets.size()) {
+    assert(pktIdx < packetVec.size());
+
+    bool completeAccess = false;
+    if (rCacheExpected() && isRCachePacket(pkt)) {
+        numReceivedRCachePackets++;
+        completeAccess = (numReceivedRCachePackets == _rCachePackets.size());
+    } else if (!rCacheExpected()) {
+        numReceivedPackets++;
+        completeAccess = (numReceivedPackets == _packets.size());
+    }
+
+    if (completeAccess) {
         flags.set(Flag::Complete);
         /* Assemble packets. */
         PacketPtr resp = isLoad()
             ? Packet::createRead(_mainReq)
             : Packet::createWrite(_mainReq);
-        if (isLoad())
+        if (isLoad()) {
             resp->dataStatic(_inst->memData);
-        else
+        } else {
             resp->dataStatic(_data);
+        }
         resp->senderState = this;
         _port.completeDataAccess(resp);
         delete resp;
     }
+
     _hasStaleTranslation = false;
     return true;
 }
