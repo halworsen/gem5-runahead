@@ -230,10 +230,10 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
         ++stats.runaheadLLLsCompleted;
     }
 
-    // If it's a memory op that was initiated during runahead but we've since exited it,
-    // do (almost) nothing.
-    bool staleRunaheadCompletion = false;
-    if ((request->isRunahead() || inst->isRunahead()) && !cpu->inRunahead(inst->threadNumber)) {
+    // If it's a memory op that was initiated during runahead but we've since exited it, track it
+    if (request->isRunahead() && !cpu->inRunahead(inst->threadNumber)) {
+        assert(inst->isRunahead() &&
+               (inst->isSquashed() || cpu->isArchSquashPending(inst->threadNumber)));
         DPRINTF(RunaheadLSQ, "[sn:%llu] Stale runahead inst (PC %s) completed data access.\n",
                 inst->seqNum, inst->pcState());
         staleRunaheadCompletion = true;
@@ -1197,6 +1197,10 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
     DPRINTF(LSQUnit, "Completing writeback for memop [sn:%llu] PC %s (load:%i)\n",
             inst->seqNum, inst->pcState(), inst->isLoad());
 
+    ThreadID tid = inst->threadNumber;
+    if (inst->isRunahead() && !cpu->inRunahead(tid) && !cpu->isArchSquashPending(tid))
+        assert(inst->isSquashed());
+
     // Squashed instructions do not need to complete their access.
     if (inst->isSquashed()) {
         assert (!inst->isStore() || inst->isStoreConditional());
@@ -1328,17 +1332,10 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
     DPRINTF(LSQUnit, "Attempting to send packet (Addr %#x) to cache. load: %d\n",
             data_pkt->getAddr(), isLoad);
 
-    // Stale runahead requests get dropped
-    if (request->isRunahead() && !cpu->inRunahead(request->instruction()->threadNumber)) {
-        DPRINTF(RunaheadLSQ, "[sn:%llu]Stale runahead request tried to send %s packet. Dropping.\n",
-                request->instruction()->seqNum, isLoad ? "read" : "write");
-        request->packetSent();
-        return success;
-    }
-
     // Everything goes to real cache except runahead stores
     if (!request->isRunahead() || isLoad) {
-        assert(!request->instruction()->isRunahead() || isLoad);
+        assert(!request->isRunahead() || !data_pkt->isWrite());
+
         if (!lsq->cacheBlocked() &&
             lsq->cachePortAvailable(isLoad)) {
             if (!dcachePort->sendTimingReq(data_pkt)) {

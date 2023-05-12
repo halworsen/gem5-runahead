@@ -1201,6 +1201,10 @@ IEW::executeInsts()
 
         DPRINTF(IEW, "Execute: Processing PC %s, [tid:%i] [sn:%llu].\n",
                 inst->pcState(), inst->threadNumber,inst->seqNum);
+        
+        if (inst->isRunahead())
+            DPRINTF(RunaheadIEW, "Execute: [sn:%llu] Instruction is runahead.\n",
+                   inst->seqNum);
 
         // Notify potential listeners that this instruction has started
         // executing
@@ -1347,14 +1351,18 @@ IEW::executeInsts()
                 panic("Unexpected memory type!\n");
             }
 
-            // If the CPU is possibly on the wrong path of execution in runahead,
-            // faults are dropped and the memop is poisoned, then sent to commit
+            // If the CPU is speculating in runahead, the inst is sent
+            // directly to commit with poison if it faulted
             if (fault != NoFault &&
                 inst->isRunahead() && cpu->possiblyDiverging(inst->threadNumber)) {
+                DPRINTF(RunaheadIEW, "[sn:%llu] Inst faulted with %s in possibly diverging runahead. "
+                                     "Ignoring and sending to commit.",
+                                     inst->seqNum, inst->fault->name());
                 inst->fault = NoFault;
                 ++iewStats.divergentFaults;
 
-                // The inst may have been set as executed already (e.g. loads do this on a fault)
+                //inst->setPoisoned();
+                // The inst may have been set as executed already (e.g. stores do this on a fault)
                 if (!inst->isExecuted()) {
                     inst->setExecuted();
                     instToCommit(inst);

@@ -222,8 +222,12 @@ bool
 LSQ::sendToRunaheadCache(PacketPtr pkt)
 {
     LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
-    ThreadID tid = request->instruction()->threadNumber;
-    assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
+    assert(request->isRunahead());
+    // Runahead stores can writeback outside of runahead if they were commited before runahead exited
+    if (pkt->isRead()) {
+        ThreadID tid = request->instruction()->threadNumber;
+        assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
+    }
     assert(request->instruction()->isRunahead());
 
     PacketPtr rCachePkt = runaheadCache->handlePacket(pkt);

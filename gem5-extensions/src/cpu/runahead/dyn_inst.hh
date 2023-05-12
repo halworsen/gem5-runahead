@@ -849,7 +849,13 @@ class DynInst : public ExecContext, public RefCounted
     //Runahead
     //-----------------------
     /** Marks this instruction as poisoned */
-    void setPoisoned() { instFlags.set(Poisoned); }
+    void
+    setPoisoned()
+    {
+        // Poison should only be propagated in runahead or while the CPU is waiting to restore state
+        assert(cpu->inRunahead(threadNumber) || cpu->isArchSquashPending(threadNumber));
+        instFlags.set(Poisoned);
+    }
 
     /** Returns whether or not this instruction is poisoned */
     bool isPoisoned() const { return instFlags[Poisoned]; }
@@ -858,6 +864,8 @@ class DynInst : public ExecContext, public RefCounted
     void
     setRunahead()
     {
+        // No insts should be marked as runahead if an arch squash is pending
+        assert(cpu->inRunahead(threadNumber));
         instFlags.set(Runahead);
         if (hasRequest() && savedRequest != nullptr)
             savedRequest->setRunahead();

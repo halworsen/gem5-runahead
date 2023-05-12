@@ -1066,6 +1066,7 @@ Fetch::buildInst(ThreadID tid, StaticInstPtr staticInst,
             instruction->staticInst->disassemble(this_pc.instAddr()));
 
     if (cpu->inRunahead(tid)) {
+        assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
         DPRINTF(RunaheadFetch, "[tid:%i] Instruction [sn:%llu] (PC %s) was fetched in runahead.\n",
                 tid, instruction->seqNum, this_pc);
         instruction->setRunahead();

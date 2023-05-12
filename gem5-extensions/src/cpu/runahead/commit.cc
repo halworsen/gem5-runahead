@@ -1296,9 +1296,8 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
     if (inst_fault != NoFault) {
         DPRINTF(Commit,
-                "Inst [tid:%i] [sn:%llu] PC %s has a fault\n"
-                "Runahead:%i, Poison:%i\n",
-                tid, head_inst->seqNum, head_inst->pcState(),
+                "Inst [tid:%i] [sn:%llu] PC %s has a %s fault. Runahead:%i, Poison:%i\n",
+                tid, head_inst->seqNum, inst_fault->name(), head_inst->pcState(),
                 head_inst->isRunahead(), head_inst->isPoisoned());
 
         if (iewStage->hasStoresToWB(tid) || inst_num > 0) {
