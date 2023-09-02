@@ -409,6 +409,9 @@ public:
     /** The instruction that caused us to enter runahead mode */
     DynInstPtr runaheadCause[MaxThreads];
 
+    /** Check if we can enter runahead right now */
+    bool canEnterRunahead(ThreadID tid);
+
     /** Enter runahead, starting from the instruction at the head of the ROB */
     void enterRunahead(ThreadID tid);
 

@@ -1547,41 +1547,61 @@ CPU::dumpInsts()
     }
 }
 
+bool
+CPU::canEnterRunahead(ThreadID tid)
+{
+    if (!runaheadEnabled)
+        return false;
+
+    if (inRunahead(tid)) {
+        DPRINTF(RunaheadCPU, "[tid:%i] Already in runahead\n", tid);
+        return false;
+    }
+
+    // Check if there are any outstanding committed stores
+    // If so, we must wait for architectural state to settle or runahead may compromise correctness
+    if (iew.hasStoresToWB(tid)) {
+        DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, IEW has outstanding stores.\n", tid);
+        return false;
+    }
+
+    return true;
+}
+
 void
 CPU::enterRunahead(ThreadID tid)
 {
-    if (!runaheadEnabled)
+    if (!canEnterRunahead(tid))
         return;
-
-    if (inRunahead(tid)) {
-        DPRINTF(RunaheadCPU, "[tid:%i] Already in runahead, ignoring.\n", tid);
-        return;
-    }
-
-    inRunahead(tid, true);
 
     const DynInstPtr &robHead = rob.readHeadInst(tid);
     assert(robHead->isLoad());
 
     DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead, caused by sn:%llu (PC %s).\n",
                          tid, robHead->seqNum, robHead->pcState());
+
+    inRunahead(tid, true);
     // Store the instruction that caused entry into runahead
     runaheadCause[tid] = robHead;
 
     /**
-      * Mark all in-flight instructions as runahead
-      * Note that it is not enough to mark all ROB instructions as runahead
-      * Some instructions may be in frontend buffers or commited stores,
-      * and we need to mark the entire instruction window
+      * Mark all in-flight instructions as runahead.
+      * Note that it is not enough to mark all ROB instructions as runahead.
+      * Some instructions may be in frontend buffers,
+      * and we need to mark the entire instruction window.
       */
     for (DynInstPtr inst : instList) {
-        if (inst->threadNumber == tid) {
-            DPRINTF(RunaheadCPU, "[tid:%i] Marking instruction [sn:%llu] PC %s as runahead\n",
-                    tid, inst->seqNum, inst->pcState());
-            inst->setRunahead();
-        }
+        // Committed instructions are not considered in-flight
+        if (inst->threadNumber != tid || inst->isCommitted())
+            continue;
+
+        DPRINTF(RunaheadCPU, "[tid:%i] Marking instruction [sn:%llu] PC %s as runahead\n",
+                tid, inst->seqNum, inst->pcState());
+        inst->setRunahead();
     }
 
+    // Invalidate R cache for the upcoming runahead period
+    runaheadCache.invalidateCache();
     // Poison the LLL and "execute" it so it can drain out.
     handleRunaheadLLL(robHead);
 
@@ -1595,7 +1615,6 @@ CPU::exitRunahead(ThreadID tid)
     DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead. Instructions pseudoretired: %i\n",
                          tid, instsPseudoretired);
     inRunahead(tid, false);
-    possiblyDiverging(tid, false);
 
     // Squash every instruction after the LLL that caused runahead
     const DynInstPtr squashInst = runaheadCause[tid];
@@ -1631,8 +1650,7 @@ CPU::restoreCheckpointState(ThreadID tid)
     archStateCheckpoint.restore(tid);
     // Clear all register poison
     regFile.clearPoison();
-    // Invalidate Rcache
-    runaheadCache.invalidateCache();
+    possiblyDiverging(tid, false);
 
     archSquashPending[tid] = false;
 }
