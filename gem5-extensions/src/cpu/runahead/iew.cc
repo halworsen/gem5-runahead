@@ -1280,6 +1280,9 @@ IEW::executeInsts()
             continue;
         }
 
+        // Check that we're not about to execute a normal instruction while an arch squash is pending
+        assert(!(cpu->isArchSquashPending(inst->threadNumber) && !inst->isRunahead()));
+
         // Execute instruction.
         // Note that if the instruction faults, it will be handled
         // at the commit stage.
@@ -1355,9 +1358,9 @@ IEW::executeInsts()
             // directly to commit with poison if it faulted
             if (fault != NoFault &&
                 inst->isRunahead() && cpu->possiblyDiverging(inst->threadNumber)) {
-                DPRINTF(RunaheadIEW, "[sn:%llu] Inst faulted with %s in possibly diverging runahead. "
+                DPRINTF(RunaheadIEW, "[sn:%llu] Inst faulted in possibly diverging runahead. "
                                      "Ignoring and sending to commit.",
-                                     inst->seqNum, inst->fault->name());
+                                     inst->seqNum, fault->name());
                 inst->fault = NoFault;
                 ++iewStats.divergentFaults;
 
@@ -1516,6 +1519,9 @@ IEW::writebackInsts()
         // when it's ready to execute the strictly ordered load.
         if (!inst->isSquashed() && inst->isExecuted() &&
                 inst->getFault() == NoFault) {
+            // Normal instructions should not writeback results that will be squashed by
+            // an architectural state restore after runahead
+            assert(!(cpu->isArchSquashPending(inst->threadNumber) && !inst->isRunahead()));
             int dependents = instQueue.wakeDependents(inst);
 
             for (int i = 0; i < inst->numDestRegs(); i++) {

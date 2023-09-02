@@ -232,11 +232,15 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
 
     // If it's a memory op that was initiated during runahead but we've since exited it, track it
     if (request->isRunahead() && !cpu->inRunahead(inst->threadNumber)) {
-        assert(inst->isRunahead() &&
-               (inst->isSquashed() || cpu->isArchSquashPending(inst->threadNumber)));
         DPRINTF(RunaheadLSQ, "[sn:%llu] Stale runahead inst (PC %s) completed data access.\n",
                 inst->seqNum, inst->pcState());
-        staleRunaheadCompletion = true;
+        assert(inst->isRunahead());
+        // Should have been squashed already or is about to be squashed
+        // If not, the instruction is trying to complete in normal mode without having its architectural effect squashed
+        // Stores may commit (and drain!) before runahead is entered but before they are completed.
+        // So it's possible that runahead stores complete after runahead is exited again since
+        // outstanding requests are not squashed.
+        assert(inst->isSquashed() || cpu->isArchSquashPending(inst->threadNumber) || inst->isStore());
         ++stats.staleRunaheadInsts;
     }
 
@@ -246,12 +250,12 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
     if (inst->isSquashed())
         return;
 
-    // If we're expecting R-cache to handle the request,
-    // the request must contain a R-cache response
+    // If we're expecting R-cache to handle this instruction,
+    // we only writeback using packets from R-cache
     if (request->rCacheExpected() && !request->isRCachePacket(pkt))
         return;
 
-    if (request->needWBToRegister() && !staleRunaheadCompletion) {
+    if (request->needWBToRegister()) {
         // Only loads, store conditionals and atomics perform the writeback
         // after receving the response from the memory
         assert(inst->isLoad() || inst->isStoreConditional() ||
@@ -639,16 +643,16 @@ LSQUnit::checkViolations(typename LoadQueue::iterator& loadIt,
                 if (ld_inst->hitExternalSnoop()) {
                     if (!memDepViolator ||
                             ld_inst->seqNum < memDepViolator->seqNum) {
-                        DPRINTF(LSQUnit, "Detected fault with inst [sn:%lli] "
-                                "and [sn:%lli] at address %#x\n",
+                        DPRINTF(LSQUnit, "Detected fault with load [sn:%lli] "
+                                "and load [sn:%lli] at address %#x\n",
                                 inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
                         memDepViolator = ld_inst;
 
                         ++stats.memOrderViolation;
 
                         return std::make_shared<GenericISA::M5PanicFault>(
-                            "Detected fault with inst [sn:%lli] and "
-                            "[sn:%lli] at address %#x\n",
+                            "Detected fault with load [sn:%lli] and "
+                            "load [sn:%lli] at address %#x\n",
                             inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
                     }
                 }
@@ -666,16 +670,16 @@ LSQUnit::checkViolations(typename LoadQueue::iterator& loadIt,
                 if (memDepViolator && ld_inst->seqNum > memDepViolator->seqNum)
                     break;
 
-                DPRINTF(LSQUnit, "Detected fault with inst [sn:%lli] and "
-                        "[sn:%lli] at address %#x\n",
+                DPRINTF(LSQUnit, "Detected fault with store [sn:%lli] and "
+                        "load [sn:%lli] at address %#x\n",
                         inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
                 memDepViolator = ld_inst;
 
                 ++stats.memOrderViolation;
 
                 return std::make_shared<GenericISA::M5PanicFault>(
-                    "Detected fault with "
-                    "inst [sn:%lli] and [sn:%lli] at address %#x\n",
+                    "Detected fault with store [sn:%lli] "
+                    "and load [sn:%lli] at address %#x\n",
                     inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
             }
         }
@@ -1197,13 +1201,19 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
     DPRINTF(LSQUnit, "Completing writeback for memop [sn:%llu] PC %s (load:%i)\n",
             inst->seqNum, inst->pcState(), inst->isLoad());
 
-    ThreadID tid = inst->threadNumber;
-    if (inst->isRunahead() && !cpu->inRunahead(tid) && !cpu->isArchSquashPending(tid))
-        assert(inst->isSquashed());
-
     // Squashed instructions do not need to complete their access.
     if (inst->isSquashed()) {
         assert (!inst->isStore() || inst->isStoreConditional());
+        ++stats.ignoredResponses;
+        return;
+    }
+
+    // Neither do stale runahead instructions
+    // These might be caught by the squash above but because of squash bandwidth some stale
+    // runahead instructions are expected to make it here before the runahead squash ends
+    ThreadID tid = inst->threadNumber;
+    if (inst->isRunahead() && !cpu->inRunahead(tid)) {
+        assert(!inst->isStore());
         ++stats.ignoredResponses;
         return;
     }
@@ -1666,6 +1676,9 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
                     request->discard();
                 }
 
+                // Make sure we aren't forwarding runahead stores to normal loads
+                assert(!(store_it->instruction()->isRunahead() && !load_inst->isRunahead()));
+
                 // Check if the store is poisoned. If so, the poison is forwarded to the load.
                 if (store_it->instruction()->isPoisoned()) {
                     DPRINTF(RunaheadLSQ, "[sn:%llu] PC %s Load was poisoned by forwarded store "
@@ -1681,8 +1694,7 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
                 if (store_it->instruction()->isRunahead() && load_inst->isRunahead())
                     ++stats.forwardedRunaheadLoads;
 
-                WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt,
-                        this);
+                WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt, this);
 
                 // We'll say this has a 1 cycle load-store forwarding latency
                 // for now.
