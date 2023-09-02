@@ -185,8 +185,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "number cycles where commit BW limit reached"),
       ADD_STAT(loadsAtROBHead, statistics::units::Count::get(),
                "Total amount of loads that made it to ROB head during commit"),
-      ADD_STAT(lllAtROBHead, statistics::units::Count::get(),
-               "Total amount of LLLs that made it to ROB head during commit"),
+      ADD_STAT(lllAtROBHead, statistics::units::Cycle::get(),
+               "Total amount of cycles with LLLs at the ROB head"),
       ADD_STAT(instsPseudoretired, statistics::units::Count::get(),
                "Number of instructions committed in runahead"),
       ADD_STAT(commitPoisonedInsts, statistics::units::Count::get(),
@@ -1053,7 +1053,7 @@ Commit::commitInsts()
                 if (depth >= cpu->lllDepthThreshold) {
                     ++stats.lllAtROBHead;
 
-                    // If not already in runahead, enter it
+                    // If not already in runahead, try to enter it
                     // If in runahead, make sure the load isn't already poisoned (waiting to drain)
                     if (!cpu->inRunahead(tid)) {
                         cpu->enterRunahead(tid);

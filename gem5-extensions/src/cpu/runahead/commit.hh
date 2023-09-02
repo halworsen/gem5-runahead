@@ -509,7 +509,7 @@ class Commit
 
         /** Amount of loads that made it to the head of the ROB during commit */
         statistics::Scalar loadsAtROBHead;
-        /** Amount of long-latency loads that made it to the head of the ROB during commit */
+        /** Amount of cycles with long-latency loads at the head of the ROB during commit */
         statistics::Scalar lllAtROBHead;
         /** Total number of instructions committed during runahead */
         statistics::Vector instsPseudoretired;
