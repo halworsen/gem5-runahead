@@ -21,11 +21,8 @@ def add_memory_args(parser):
     cache_group.add_argument('--l2-assoc', default=8, type=int, help='Associativity of the L2 cache')
     cache_group.add_argument('--l2-banks', default=1, type=int, help='The amount of L2 banks')
 
-    # TODO: Implement L3 cache
-    unused_group = parser.add_argument_group(title='UNUSED/TBA')
-    
-    unused_group.add_argument('--l3-size', default='6MB', help='Amount of L3 cache memory')
-    unused_group.add_argument('--l3-assoc', default=12, help='Associativity of the L3 cache')
+    cache_group.add_argument('--l3-size', default='6MB', help='Amount of L3 cache memory')
+    cache_group.add_argument('--l3-assoc', default=12, help='Associativity of the L3 cache')
 
 def setup_cache(args):
     caches = ThreeLevelCacheHierarchy(
