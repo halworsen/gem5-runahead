@@ -5,9 +5,8 @@ m5out/
 # relevant papers
 papers/*.pdf
 
-# environment & workspace configuration
+# python environment
 venv/
-.vscode/
 
 # misc. output redirections
 *.txt

@@ -1,0 +1,47 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug gem5",
+            "type": "cppdbg",
+            "request": "launch",
+
+            "program": "${workspaceFolder}/gem5/build/X86/gem5.debug",
+            // dynamic input will launch the job prior to launch
+            "postDebugTask": "Kill SLURM jobs",
+
+            "MIMode": "gdb",
+            "miDebuggerPath": "${userHome}/gdb-13.2/gdb/gdb",
+            "miDebuggerServerAddress": "${input:gdbTarget}",
+
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+        }
+    ],
+    "inputs": [
+        {
+            "id": "jobNode",
+            "type": "promptString",
+            "description": "Name of the worker node running the gdbserver"
+        },
+        {
+            "id": "gdbTarget",
+            "type": "command",
+            "command": "shellCommand.execute",
+            "args": {
+                "command": "./scripts/launch_gdb.sh ./jobs/gem5_gdb.sh",
+                "fieldSeparator": "|",
+                "useFirstResult": true,
+                "cwd": "${workspaceFolder}",
+            }
+        }
+    ]
+}

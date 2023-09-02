@@ -1,0 +1,43 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build gem5 - debug",
+            "group": "build",
+            "type": "shell",
+            "command": "make",
+            "args": ["gem5-debug"]
+        },
+        {
+            "label": "Build gem5 - optimized",
+            "group": "build",
+            "type": "shell",
+            "command": "make",
+            "args": ["gem5-opt"]
+        },
+        {
+            "label": "Build gem5 - fast",
+            "group": "build",
+            "type": "shell",
+            "command": "make",
+            "args": ["gem5-fast"]
+        },
+        {
+            "label": "Run job - gem5-gdb",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/runjob.sh",
+            "args": [
+                "${workspaceFolder}/jobs/gem5_gdb.sh"
+            ],
+            "group": "test",
+            "isBackground": false
+        },
+        {
+            "label": "Kill SLURM jobs",
+            "type": "shell",
+            "command": "squeue --me -h -o \"%i\" | xargs scancel",
+            "group": "none",
+            "isBackground": false
+        }
+    ]
+}

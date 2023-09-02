@@ -1,1 +1,1 @@
-Compile with `EXTRAS=/path/to/gem5-extensions/src`
+Compile gem5 with `scons EXTRAS=/path/to/gem5-extensions/src build/<isa>/gem5.<build-variant>`

@@ -43,6 +43,18 @@ GEM5_EXTRAS=$(HOME)/gem5-runahead/gem5-extensions/src
 gem5:
 	cd gem5; scons EXTRAS=$(GEM5_EXTRAS) build/$(ISA)/gem5.$(BUILD_VARIANT) -j$(BUILD_THREADS)
 
+gem5-opt:
+	cd gem5; scons EXTRAS=$(GEM5_EXTRAS) build/$(ISA)/gem5.opt -j$(BUILD_THREADS)
+
+gem5-debug:
+	cd gem5; scons EXTRAS=$(GEM5_EXTRAS) build/$(ISA)/gem5.debug -j$(BUILD_THREADS)
+
+gem5-fast:
+	cd gem5; scons EXTRAS=$(GEM5_EXTRAS) build/$(ISA)/gem5.fast -j$(BUILD_THREADS)
+
+gem5-bare:
+	cd gem5; scons build/$(ISA)/gem5.$(BUILD_VARIANT) -j$(BUILD_THREADS)
+
 # run with 'make run opts="--arg1 --arg2 --etc" script=gem5-extensions/configs/config.py
 run:
 	./gem5/build/$(ISA)/gem5.$(BUILD_VARIANT) $(opts) $(script)

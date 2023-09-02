@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-test"
+#SBATCH --job-name="gem5-gdb"
 #SBATCH --account=share-ie-idi
 #SBATCH --mail-user=markus@halvorsenfamilien.com
 #SBATCH --mail-type=ALL
@@ -32,17 +32,29 @@ module --quiet purge
 module restore gem5
 module list
 
-cd $HOME/gem5-runahead
+cd $RUNAHEAD_DIR
 source venv/bin/activate
 echo "--- python packages ---"
 pip freeze
 
-SIZE=$1
+SIZE=2
 echo
 echo "job: test run of gem5 (SE mode) - $SIZE x $SIZE matrix multiplication"
 echo "time: $(date)"
 echo "--- start job ---"
 
-./gem5/build/X86/gem5.debug --outdir $M5_OUT_DIR --debug-flags=Runahead,O3CPUAll \
+# Debug functions:
+# schedBreak(tick) - schedule SIGTRAP at tick
+# setDebugFlag("flag") - set a debug flag
+# clearDebugFlag("flag") - clear a debug flag
+# eventqDump() - print all events in the event queue
+# takeCheckpoint(tick) - write a checkpoint at tick
+# SimObject::find("system.qualified.name") - use FQN to get a pointer to the specified simobject
+#
+# use schedBreak(<tick>) when connected to target
+GDBSERVER=$HOME/gdb-13.2/gdbserver/gdbserver
+$GDBSERVER localhost:34612 \
+    ./gem5/build/X86/gem5.debug --debug-break=100000 \
+    --outdir $M5_OUT_DIR \
     $TEST_SCRIPT --size=$SIZE \
     > $SIMOUT_FILE
