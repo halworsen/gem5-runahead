@@ -8,6 +8,7 @@
             "name": "Debug gem5",
             "type": "cppdbg",
             "request": "launch",
+            "cwd": "${workspaceFolder}",
 
             "program": "${workspaceFolder}/gem5/build/X86/gem5.debug",
             // dynamic input will launch the job prior to launch
