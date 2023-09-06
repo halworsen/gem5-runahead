@@ -334,6 +334,9 @@ class PhysRegFile
     void
     regPoisoned(PhysRegIdPtr physReg, bool poisoned)
     {
+        // Misc regs are a problem because their flat IDs are 0
+        if(physReg->classValue() == MiscRegClass)
+            panic("Attempt to %s misc reg %i", poisoned ? "poison" : "cure", physReg->flatIndex());
         if (physReg->classValue() == InvalidRegClass)
             return;
         const RegIndex idx = physReg->flatIndex();

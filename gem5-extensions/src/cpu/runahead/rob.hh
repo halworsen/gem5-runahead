@@ -107,6 +107,9 @@ class ROB
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;
 
+    /** Sanity checks before a arch state restore */
+    void archRestoreSanityCheck();
+
     /** Takes over another CPU's thread. */
     void takeOverFrom();
 

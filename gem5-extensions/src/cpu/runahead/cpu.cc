@@ -1565,6 +1565,9 @@ CPU::canEnterRunahead(ThreadID tid)
         return false;
     }
 
+    // Maybe also check for committed insts that are not completed?
+    // Dunno if that applies to more than just stores
+
     return true;
 }
 
@@ -1645,6 +1648,16 @@ void
 CPU::restoreCheckpointState(ThreadID tid)
 {
     DPRINTF(RunaheadCPU, "[tid:%i] Restoring architectural state after runahead squash.\n", tid);
+
+    // But first, a string of sanity checks:
+    // We shouldn't be in runahead anymore
+    assert(!inRunahead(tid));
+    // The ROB should be completely squashed or drained
+    rob.archRestoreSanityCheck();
+    for (DynInstPtr inst : instList) {
+        // There should be no unsquashed runahead instructions in the instruction window whatsoever
+        assert(!inst->isRunahead() || inst->isSquashed());
+    }
 
     // Restore architectural registers
     archStateCheckpoint.restore(tid);

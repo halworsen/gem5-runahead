@@ -140,6 +140,18 @@ ROB::drainSanityCheck() const
 }
 
 void
+ROB::archRestoreSanityCheck()
+{
+    for (ThreadID tid = 0; tid  < numThreads; tid++)
+    {
+        for (DynInstPtr inst : instList[tid])
+        {
+            assert(inst->isSquashed());
+        }
+    }
+}
+
+void
 ROB::takeOverFrom()
 {
     resetState();
