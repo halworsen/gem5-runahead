@@ -3,13 +3,13 @@
 #SBATCH --account=ie-idi
 #SBATCH --mail-user=markus@halvorsenfamilien.com
 #SBATCH --mail-type=ALL
-#SBATCH --output=/dev/null                       # output is manually redirected
+#SBATCH --output=/dev/null
 #SBATCH --partition=CPUQ
-#SBATCH --nodes=1                                # 1 compute node
-#SBATCH --cpus-per-task=2                        # 2 cores
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=1500
 #SBATCH --time=06:00:00
-#SBATCH --signal=SIGINT                          # exit with SIGINT to let gem5 save stats 
+#SBATCH --signal=SIGINT
 
 SPEC2017_DIR=/cluster/home/markuswh/gem5-runahead/spec2017
 RUNSCRIPT_DIR="$SPEC2017_DIR/scripts"
@@ -45,6 +45,7 @@ source venv/bin/activate
 echo "--- python packages ---"
 pip freeze
 
+echo
 echo "job: simulate SPEC2017 benchmark - $BENCHMARK"
 echo "time: $(date)"
 echo "--- start job ---"
@@ -84,6 +85,6 @@ echo "spec2017.py parameters:"
 echo "$PARAMS"
 echo
 
-./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
+./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR --debug-flags=PseudoInst \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE

@@ -1,7 +1,6 @@
 #!/bin/sh
 #SBATCH --job-name="gem5-test"
 #SBATCH --account=share-ie-idi
-#SBATCH --mail-user=markus@halvorsenfamilien.com
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null                       # output is manually redirected
 #SBATCH --partition=CPUQ
@@ -43,6 +42,6 @@ echo "job: test run of gem5 (SE mode) - $SIZE x $SIZE matrix multiplication"
 echo "time: $(date)"
 echo "--- start job ---"
 
-./gem5/build/X86/gem5.debug --outdir $M5_OUT_DIR --debug-flags=Runahead,O3CPUAll \
+./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR --debug-flags=Runahead,O3CPUAll \
     $TEST_SCRIPT --size=$SIZE \
     > $SIMOUT_FILE

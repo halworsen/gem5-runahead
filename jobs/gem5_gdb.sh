@@ -1,7 +1,6 @@
 #!/bin/sh
 #SBATCH --job-name="gem5-gdb"
 #SBATCH --account=share-ie-idi
-#SBATCH --mail-user=markus@halvorsenfamilien.com
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null                       # output is manually redirected
 #SBATCH --partition=CPUQ
@@ -54,7 +53,9 @@ echo "--- start job ---"
 # use schedBreak(<tick>) when connected to target
 GDBSERVER=$HOME/gdb-13.2/gdbserver/gdbserver
 $GDBSERVER localhost:34612 \
-    ./gem5/build/X86/gem5.debug --debug-break=100000 \
+    ./gem5/build/X86/gem5.debug --debug-break=1000 \
+    --debug-start=0 \
+    --debug-flags=Runahead,O3CPUAll,X86,TLB \
     --outdir $M5_OUT_DIR \
     $TEST_SCRIPT --size=$SIZE \
     > $SIMOUT_FILE

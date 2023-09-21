@@ -3,14 +3,14 @@
 #SBATCH --account=ie-idi
 #SBATCH --mail-user=markus@halvorsenfamilien.com
 #SBATCH --mail-type=ALL
-#SBATCH --output=/dev/null                       # output is manually redirected
-#SBATCH --array=1-28%7                           # run 7 benchmarks at a time
+#SBATCH --output=/dev/null
+#SBATCH --array=1-28%4
 #SBATCH --partition=CPUQ
-#SBATCH --nodes=1                                # 1 compute nodes
-#SBATCH --cpus-per-task=2                        # 2 CPU cores
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=1500
 #SBATCH --time=6-06:00:00
-#SBATCH --signal=SIGINT                          # exit with SIGINT to let gem5 save stats 
+#SBATCH --signal=SIGINT
 
 ALL_BENCHMARKS=(
     "perlbench_s_0" "perlbench_s_1" "perlbench_s_2"
@@ -77,7 +77,7 @@ FSPARAMS=(
     "--kernel=$SPEC2017_DIR/plinux"
     "--image=$SPEC2017_DIR/x86-3.img"
     "--script=$RUNSCRIPT"
-    "--max-insts=2000000000" # max 2 billion instructions
+    "--max-insts=5000000000" # max 5 billion instructions
     "--clock=3.2GHz"
 
     # Cache & memory

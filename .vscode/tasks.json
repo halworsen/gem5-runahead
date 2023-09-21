@@ -6,21 +6,27 @@
             "group": "build",
             "type": "shell",
             "command": "make",
-            "args": ["gem5-debug"]
+            "args": [
+                "gem5-debug"
+            ]
         },
         {
             "label": "Build gem5 - optimized",
             "group": "build",
             "type": "shell",
             "command": "make",
-            "args": ["gem5-opt"]
+            "args": [
+                "gem5-opt"
+            ]
         },
         {
             "label": "Build gem5 - fast",
             "group": "build",
             "type": "shell",
             "command": "make",
-            "args": ["gem5-fast"]
+            "args": [
+                "gem5-fast"
+            ]
         },
         {
             "label": "Run job - gem5-gdb",
@@ -33,11 +39,31 @@
             "isBackground": false
         },
         {
+            "label": "Run job - test_recpu",
+            "type": "shell",
+            "command": "sbatch",
+            "args": [
+                "${workspaceFolder}/jobs/test_recpu.sh",
+                "2"
+            ],
+            "group": "test",
+            "isBackground": false
+        },
+        {
             "label": "Kill SLURM jobs",
             "type": "shell",
             "command": "squeue --me -h -o \"%i\" | xargs scancel",
             "group": "none",
-            "isBackground": false
+            "isBackground": false,
+            "problemMatcher": []
+        },
+        {
+            "label": "Restore gem5 modules",
+            "type": "shell",
+            "command": "module restore gem5",
+            "group": "none",
+            "isBackground": false,
+            "problemMatcher": []
         }
     ]
 }

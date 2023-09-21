@@ -16,6 +16,7 @@ def setup_system(args) -> System:
     system.mem_mode = 'timing'
     system.mem_ranges = [AddrRange('1GB')]
 
+    #system.cpu = X86O3CPU()
     system.cpu = X86RunaheadCPU()
     #system.cpu.enableRunahead = False
     #system.cpu.numROBEntries = 16

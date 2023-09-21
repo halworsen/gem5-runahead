@@ -1,4 +1,6 @@
 __pycache__/
+.cache/
+
 # gem5 simulation output (stats, configs, etc.)
 m5out/
 
@@ -18,3 +20,8 @@ notes.md
 
 # testing scripts
 **/test.sh
+
+# self plagiarization is some bs :)
+mkdocs.yml
+docs/
+servedocs.sh

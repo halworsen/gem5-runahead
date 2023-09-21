@@ -4,7 +4,7 @@
 # assumes it's running a gdbserver and extracts the gdbserver port and process PID
 
 JOB_SCRIPT=$1
-SLURM_LOG_FILE=$HOME/gem5-runahead/jobs/testlogs/gem5-test_slurm.log
+SLURM_LOG_FILE=$HOME/gem5-runahead/jobs/testlogs/gem5-gdb_slurm.log
 
 # queue job & wait for start
 JOB_ID=$(sbatch $JOB_SCRIPT | sed 's/Submitted batch job \([0-9]\+\)$/\1/')

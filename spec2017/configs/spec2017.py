@@ -6,8 +6,6 @@ from m5.objects import Root
 
 from gem5.utils.requires import requires
 from gem5.components.boards.x86_board import X86Board
-from gem5.components.boards.mem_mode import MemMode
-from gem5.components.processors.cpu_types import CPUTypes
 from gem5.isas import ISA
 from gem5.resources.resource import CustomResource, CustomDiskImageResource
 
@@ -41,6 +39,13 @@ assert os.path.exists(args.kernel)
 assert os.path.exists(args.image)
 assert os.path.exists(args.script)
 
+print(f'Using linux kernel at: {args.kernel}')
+print(f'Using disk image at: {args.image}')
+print(f'Using readfile at: {args.script}')
+print('Readfile contents:')
+with open(args.script, 'r') as f:
+    print(f.read())
+
 board.set_kernel_disk_workload(
     kernel=CustomResource(args.kernel),
     disk_image=CustomDiskImageResource(
@@ -49,7 +54,6 @@ board.set_kernel_disk_workload(
     ),
     readfile=args.script,
 )
-
 
 # Apparently we need this for long running processes.
 m5.disableAllListeners()
@@ -61,6 +65,8 @@ m5.stats.reset()
 
 print('Beginning simulation')
 print('Performing boot...')
+
+assert(root.system.readfile == args.script)
 
 exit_event = m5.simulate()
 tick = m5.curTick()
@@ -74,12 +80,12 @@ if cause == 'm5_exit instruction encountered':
     m5.stats.dump()
     m5.stats.reset()
 
-    # Set the max instruction count so that we go for that amount in the actual ROI
+    # Set the max instruction count so that we go for that amount in the actual benchmark
     core = board.get_processor().get_cores()[0].core
     core.max_insts_any_thread = core.totalInsts() + args.max_insts
 # Something went wrong
 else:
-    print('Unexpected exit occured @ t{tick}')
+    print(f'Unexpected exit occured @ t{tick}')
     print(f'Exit cause: {cause}')
     exit(1)
 

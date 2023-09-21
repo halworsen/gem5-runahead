@@ -45,18 +45,35 @@ Go to the [home page for the GNU debugger (gdb)](https://www.sourceware.org/gdb/
 I've used GDB 13.2 for debugging gem5. It worked fine for the specific version of gem5 that's pinned
 as a git submodule. So that's what I'm using for this manual.
 
+#### Quick setup (gdb with python support)
+
+You want to build with python as it gives pretty printing for STL containers like lists, vectors, etc.
+
 ```bash
-# go home
-cd
-# download the gdb source files
-curl -o gdb-13-2.tar.gz https://ftp.gnu.org/gnu/gdb/gdb-13.2.tar.gz
-# unpack the gdb source files
-tar -xvzf gdb-13-2.tar.gz
+# use the gem5 module list you set up earlier
+module restore gem5
+
+# download, build and install gdb 13.2 from source
+cd $HOME
+curl -lo gdb-13.2.tar.gz https://sourceware.org/pub/gdb/releases/gdb-13.2.tar.gz
+tar -xvzf gdb-13.2.tar.gz
+
 cd gdb-13.2
-# configure to prepare for the buildening
-./configure --prefix=~/gdb-13.2
+export PYPATH=$(which python)
+# configure the build to set the RPATH to ~/lib, allowing gdb search ~/lib for shared libraries at runtime
+LDFLAGS="-Wl,-rpath,$HOME/lib" ./configure --prefix=$HOME --with-python=$PYPATH
 # build gdb
 make
+# install gdb
+make install
+
+# Symlink dynamic libraries used by gdb into ~/lib
+# This is only to make gdb work within VSCode since it doesn't let you set LD_LIBRARY_PATH before
+# running a debug session. If using gdb from the shell, you can `module restore gem5` and run gdb fine.
+cd $HOME/lib
+ln -s /cluster/apps/eb/software/GCCcore/11.3.0/lib64/libstdc++.so.6 libstdc++.so.6
+ln -s /cluster/apps/eb/software/ncurses/6.3-GCCcore-11.3.0/lib/libncursesw.so.6 libncursesw.so.6
+
 ```
 
 Then make sure gdb is installed correctly and works.

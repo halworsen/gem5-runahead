@@ -9,16 +9,18 @@
             "type": "cppdbg",
             "request": "launch",
             "cwd": "${workspaceFolder}",
+            
 
             "program": "${workspaceFolder}/gem5/build/X86/gem5.debug",
-            // dynamic input will launch the job prior to launch
+            // dynamic input will launch the job prior to launch since inputs are executed before
+            // pre-debug tasks
             "postDebugTask": "Kill SLURM jobs",
 
             "MIMode": "gdb",
-            "miDebuggerPath": "${userHome}/gdb-13.2/gdb/gdb",
+            "miDebuggerPath": "${userHome}/bin/gdb",
             "miDebuggerServerAddress": "${input:gdbTarget}",
 
-            "setupCommands": [
+            "postRemoteConnectCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
                     "text": "-enable-pretty-printing",
