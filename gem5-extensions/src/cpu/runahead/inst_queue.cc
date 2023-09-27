@@ -1419,7 +1419,9 @@ InstructionQueue::addToProducers(const DynInstPtr &new_inst)
         // In other words, a register can only have one producer (but multiple consumers)
         if (!dependGraph.empty(dest_reg->flatIndex())) {
             dependGraph.dump(dest_reg->flatIndex());
-            panic("Dependency graph %i (%s) (flat: %i) not empty!",
+
+            panic("[sn:%llu] Inst produces %i (%s) (flat: %i), but dependency graph is not empty!",
+                  new_inst->seqNum,
                   dest_reg->index(), dest_reg->className(),
                   dest_reg->flatIndex());
         }

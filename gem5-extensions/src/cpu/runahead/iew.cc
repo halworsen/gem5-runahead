@@ -625,7 +625,7 @@ IEW::instToCommit(const DynInstPtr& inst)
         }
     }
 
-    DPRINTF(IEW, "Current wb cycle: %i, width: %i, numInst: %i\nwbActual:%i\n",
+    DPRINTF(IEW, "Current wb cycle: %i, width: %i, numInst: %i, wbActual:%i\n",
             wbCycle, wbWidth, wbNumInst, wbCycle * wbWidth + wbNumInst);
     // Add finished instruction to queue to commit.
     (*iewQueue)[wbCycle].insts[wbNumInst] = inst;
@@ -1232,38 +1232,14 @@ IEW::executeInsts()
         Fault fault = NoFault;
 
         // Most poisoned-on-arrival instructions do not need to execute
-        if (inst->isPoisoned()) {
-            assert(cpu->inRunahead(inst->threadNumber) ||
-                   cpu->isArchSquashPending(inst->threadNumber));
-            DPRINTF(RunaheadIEW, "[sn:%llu] Instruction with PC %s was poisoned, skipping.\n",
-                                inst->seqNum, inst->pcState());
+        if (inst->isPoisoned() && !inst->isStore()) {
+            DPRINTF(RunaheadIEW, "[sn:%llu] Instruction with PC %s was poisoned, %s.\n",
+                                inst->seqNum, inst->pcState(),
+                                inst->isStore() ? "not skipping because it is a store" : "skipping");
 
-            // Stores are an exception. They should translate. If the address is valid,
-            // it must write poison into the runahead cache
-            if (inst->isStore()) {
-                fault = ldstQueue.executeStore(inst);
-                // If there was a fault, mark the store as executed and move on
-                if (fault != NoFault) {
-                    DPRINTF(RunaheadIEW, "[sn:%llu] Poisoned store faulted with %s, "
-                            "ignoring and resetting fault.\n",
-                            inst->seqNum, fault->name());
-                    inst->fault = NoFault;
-                    inst->setExecuted();
-                    instToCommit(inst);
-                    activityThisCycle();
-                } else if (inst->isTranslationDelayed()) {
-                    // Defer the store if address translation is delayed
-                    DPRINTF(RunaheadIEW, "[sn:%llu] Poisoned store has delayed translation, "
-                            "deferring.\n");
-                    instQueue.deferMemInst(inst);
-                }
-            } else {
-                // All other instructions are immediately marked as executed and sent to commit
-                // Destination registers will be marked as poisoned in writeback
-                inst->setExecuted();
-                instToCommit(inst);
-                activityThisCycle();
-            }
+            inst->setExecuted();
+            instToCommit(inst);
+            activityThisCycle();
 
             ++iewStats.executedInstStats.numPoisonedInsts;
             // Poisoned branches at execute are dicey. They may be mispredicted, causing
@@ -1276,17 +1252,10 @@ IEW::executeInsts()
                 cpu->possiblyDiverging(inst->threadNumber, true);
                 ++iewStats.executedInstStats.numPoisonedBranches;
             }
-
-            continue;
-        }
-
-        // Check that we're not about to execute a normal instruction while an arch squash is pending
-        assert(!(cpu->isArchSquashPending(inst->threadNumber) && !inst->isRunahead()));
-
-        // Execute instruction.
-        // Note that if the instruction faults, it will be handled
-        // at the commit stage.
-        if (inst->isMemRef()) {
+        } else if (inst->isMemRef()) {
+            // Execute memory instruction.
+            // Note that if the instruction faults, it will be handled
+            // at the commit stage.
             DPRINTF(IEW, "Execute: Calculating address for memory "
                     "reference.\n");
 
@@ -1336,6 +1305,7 @@ IEW::executeInsts()
                 }
 
                 // If the store had a fault then it may not have a mem req
+                // Note: most stores get sent to commit here. Writeback happens after commit
                 if (fault != NoFault || !inst->readPredicate() ||
                         !inst->isStoreConditional()) {
                     // If the instruction faulted, then we need to send it
@@ -1353,26 +1323,8 @@ IEW::executeInsts()
             } else {
                 panic("Unexpected memory type!\n");
             }
-
-            // If the CPU is speculating in runahead, the inst is sent
-            // directly to commit with poison if it faulted
-            if (fault != NoFault &&
-                inst->isRunahead() && cpu->possiblyDiverging(inst->threadNumber)) {
-                DPRINTF(RunaheadIEW, "[sn:%llu] Inst faulted in possibly diverging runahead. "
-                                     "Ignoring and sending to commit.",
-                                     inst->seqNum, fault->name());
-                inst->fault = NoFault;
-                ++iewStats.divergentFaults;
-
-                //inst->setPoisoned();
-                // The inst may have been set as executed already (e.g. stores do this on a fault)
-                if (!inst->isExecuted()) {
-                    inst->setExecuted();
-                    instToCommit(inst);
-                    activityThisCycle();
-                }
-            }
         } else {
+            // Execute any "normal" (not memory), computational/control instructions
             // If the instruction has already faulted, then skip executing it.
             // Such case can happen when it faulted during ITLB translation.
             // If we execute the instruction (even if it's a nop) the fault
@@ -1408,7 +1360,7 @@ IEW::executeInsts()
             // that have not been executed.
             bool loadNotExecuted = !inst->isExecuted() && inst->isLoad();
 
-            if (inst->mispredicted() && !loadNotExecuted) {
+            if (inst->mispredicted() && !loadNotExecuted && !inst->isPoisoned()) {
                 fetchRedirect[tid] = true;
 
                 DPRINTF(IEW, "[tid:%i] [sn:%llu] Execute: "
@@ -1519,9 +1471,6 @@ IEW::writebackInsts()
         // when it's ready to execute the strictly ordered load.
         if (!inst->isSquashed() && inst->isExecuted() &&
                 inst->getFault() == NoFault) {
-            // Normal instructions should not writeback results that will be squashed by
-            // an architectural state restore after runahead
-            assert(!(cpu->isArchSquashPending(inst->threadNumber) && !inst->isRunahead()));
             int dependents = instQueue.wakeDependents(inst);
 
             for (int i = 0; i < inst->numDestRegs(); i++) {
@@ -1536,7 +1485,6 @@ IEW::writebackInsts()
 
                 // Mark it as poisoned if the instruction was poisoned
                 if (inst->isPoisoned()) {
-                    assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
                     DPRINTF(RunaheadIEW,
                             "[sn:%llu] Poisoning destination register %i (%s) (flat:%i)\n",
                             inst->seqNum, destReg->index(),

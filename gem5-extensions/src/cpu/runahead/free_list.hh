@@ -79,6 +79,14 @@ class SimpleFreeList
 
     SimpleFreeList() {};
 
+    /** Clear all registers from the free list */
+    void
+    clear()
+    {
+        while (freeRegs.size())
+            freeRegs.pop();
+    }
+
     /** Add a physical register to the free list */
     void addReg(PhysRegIdPtr reg) { freeRegs.push(reg); }
 
@@ -154,6 +162,9 @@ class UnifiedFreeList
      *                           used by initial mappings.
      */
     UnifiedFreeList(const std::string &_my_name, PhysRegFile *_regFile);
+
+    /** Reset the free list so that it contains every physical register */
+    void reset();
 
     /** Gives the name of the freelist. */
     std::string name() const { return _name; };

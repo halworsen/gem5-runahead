@@ -76,8 +76,13 @@ namespace runahead
 {
 
 void
-Commit::processTrapEvent(ThreadID tid)
+Commit::processTrapEvent(ThreadID tid, bool wasRunahead)
 {
+    // If the trap was scheduled in runahead but we've since exited, don't squash
+    if (wasRunahead && !cpu->inRunahead(tid)) {
+        return;
+    }
+
     // This will get reset by commit if it was switched out at the
     // time of this event processing.
     trapSquash[tid] = true;
@@ -515,8 +520,9 @@ Commit::generateTrapEvent(ThreadID tid, Fault inst_fault)
 {
     DPRINTF(Commit, "Generating trap event for [tid:%i]\n", tid);
 
+    bool inRunahead = cpu->inRunahead(tid);
     EventFunctionWrapper *trap = new EventFunctionWrapper(
-        [this, tid]{ processTrapEvent(tid); },
+        [this, inRunahead, tid]{ processTrapEvent(tid, inRunahead); },
         "Trap", true, Event::CPU_Tick_Pri);
 
     Cycles latency = std::dynamic_pointer_cast<SyscallRetryFault>(inst_fault) ?
@@ -542,6 +548,16 @@ Commit::generateTCEvent(ThreadID tid)
     DPRINTF(Commit, "Generating TC squash event for [tid:%i]\n", tid);
 
     tcSquash[tid] = true;
+}
+
+void
+Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
+{
+    DPRINTF(RunaheadCommit, "[tid:%i] Runahead exit signal received, cause inst sn: %llu, PC: %s.\n",
+                     tid, inst->seqNum, inst->pcState());
+
+    exitRunahead[tid] = true;
+    runaheadCause[tid] = inst;
 }
 
 void
@@ -641,6 +657,43 @@ Commit::squashAfter(ThreadID tid, const DynInstPtr &head_inst)
 }
 
 void
+Commit::squashFromRunaheadExit(ThreadID tid)
+{
+    exitRunahead[tid] = false;
+
+    // Signal to all stages that they should squash and restore architectural state
+    toIEW->commitInfo[tid].squash = true;
+    // We will read this signal next cycle to perform an arch restore.
+    timeBuffer->getWire(0)->archRestore[tid] = true;
+
+    // Squash up to and including the LLL that caused entry into runahead
+    const DynInstPtr &lll = runaheadCause[tid];
+    InstSeqNum squashedSeqNum = lll->seqNum - 1;
+
+    youngestSeqNum[tid] = squashedSeqNum;
+    toIEW->commitInfo[tid].doneSeqNum = squashedSeqNum;
+
+    // Start squashing in the ROB
+    commitStatus[tid] = ROBSquashing;
+    rob->squash(squashedSeqNum, tid);
+    changedROBNumEntries[tid] = true;
+    toIEW->commitInfo[tid].robSquashing = true;
+
+    toIEW->commitInfo[tid].mispredictInst = NULL;
+    toIEW->commitInfo[tid].squashInst = rob->findInst(tid, squashedSeqNum);
+
+    set(toIEW->commitInfo[tid].pc, lll->pcState());
+
+    // Reset any in-flight traps
+    trapInFlight[tid] = false;
+    thread[tid]->trapPending = false;
+
+    cpu->activityThisCycle();
+    // Let the CPU exit runahead mode now that the squash has been signalled
+    cpu->exitRunahead(tid);
+}
+
+void
 Commit::tick()
 {
     wroteToTimeBuffer = false;
@@ -666,12 +719,6 @@ Commit::tick()
             if (rob->isDoneSquashing(tid)) {
                 DPRINTF(Commit, "[tid:%i] ROB done squashing, switching to running.\n", tid);
                 commitStatus[tid] = Running;
-
-                // The squash was caused by a runahead exit.
-                // We should ask the CPU to restore its state now.
-                if (cpu->isArchSquashPending(tid)) {
-                    cpu->restoreCheckpointState(tid);
-                }
             } else {
                 DPRINTF(Commit,"[tid:%i] Still Squashing, cannot commit any"
                         " insts this cycle.\n", tid);
@@ -713,6 +760,17 @@ Commit::tick()
                     "%s is head of ROB and not ready\n",
                     tid, headInst->seqNum, headInst->pcState());
         }
+    }
+
+    threads = activeThreads->begin();
+    while (threads != end) {
+        ThreadID tid = *threads++;
+
+        wasRunahead[tid] = cpu->inRunahead(tid);
+
+        // If we signalled to ourself that we should perform an arch restore, do so now
+        if (timeBuffer->getWire(-1)->archRestore[tid])
+            cpu->restoreCheckpointState(tid);
     }
 
     if (wroteToTimeBuffer) {
@@ -836,10 +894,17 @@ Commit::commit()
             assert(commitStatus[tid] != TrapPending);
             squashFromTC(tid);
         } else if (commitStatus[tid] == SquashAfterPending) {
-            // A squash from the previous cycle of the commit stage (i.e.,
-            // commitInsts() called squashAfter) is pending. Squash the
-            // thread now.
-            squashFromSquashAfter(tid);
+            // Make sure we're not about to do a squash after initiated by a stale runahead inst
+            if (!(wasRunahead[tid] && !cpu->inRunahead(tid))) {
+                // A squash from the previous cycle of the commit stage (i.e.,
+                // commitInsts() called squashAfter) is pending. Squash the
+                // thread now.
+                squashFromSquashAfter(tid);
+            } else {
+                commitStatus[tid] = Running;
+            }
+        } else if (exitRunahead[tid]) {
+            squashFromRunaheadExit(tid);
         }
 
         // Squashed sequence number must be older than youngest valid
@@ -1135,6 +1200,11 @@ Commit::commitInsts()
                 // Updates misc. registers.
                 head_inst->updateMiscRegs();
 
+                // Incremental update of architectural state checkpoint
+                if (!head_inst->isRunahead()) {
+                    cpu->updateArchCheckpoint(tid, head_inst);
+                }
+
                 // Check instruction execution if it successfully commits and
                 // is not carrying a fault.
                 if (cpu->checker) {
@@ -1233,8 +1303,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         assert(head_inst->isNonSpeculative() || head_inst->isStoreConditional()
                || head_inst->isReadBarrier() || head_inst->isWriteBarrier()
                || head_inst->isAtomic()
-               || (head_inst->isLoad() && head_inst->strictlyOrdered())
-               || (head_inst->isStore() && head_inst->isPoisoned()));
+               || (head_inst->isLoad() && head_inst->strictlyOrdered()));
 
         DPRINTF(Commit,
                 "Encountered a barrier or non-speculative "
@@ -1297,7 +1366,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     if (inst_fault != NoFault) {
         DPRINTF(Commit,
                 "Inst [tid:%i] [sn:%llu] PC %s has a %s fault. Runahead:%i, Poison:%i\n",
-                tid, head_inst->seqNum, inst_fault->name(), head_inst->pcState(),
+                tid, head_inst->seqNum, head_inst->pcState(), inst_fault->name(),
                 head_inst->isRunahead(), head_inst->isPoisoned());
 
         if (iewStage->hasStoresToWB(tid) || inst_num > 0) {
@@ -1323,15 +1392,26 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         // execution doesn't generate extra squashes.
         thread[tid]->noSquashFromTC = true;
 
-        // Execute the trap.  Although it's slightly unrealistic in
-        // terms of timing (as it doesn't wait for the full timing of
-        // the trap event to complete before updating state), it's
-        // needed to update the state as soon as possible.  This
-        // prevents external agents from changing any specific state
-        // that the trap need.
-        cpu->trap(inst_fault, tid,
-                  head_inst->notAnInst() ? nullStaticInstPtr :
-                      head_inst->staticInst);
+        /**
+         * All faults are ignored in runahead. The problem isn't "architecturally real",
+         * and if it was a syscall, we definitely don't want it to execute speculatively.
+         * The trap squash will still happen, but the trap itself does not execute
+        */ 
+        if (!head_inst->isRunahead()) {
+            // Execute the trap.  Although it's slightly unrealistic in
+            // terms of timing (as it doesn't wait for the full timing of
+            // the trap event to complete before updating state), it's
+            // needed to update the state as soon as possible.  This
+            // prevents external agents from changing any specific state
+            // that the trap need.
+            cpu->trap(inst_fault, tid,
+                    head_inst->notAnInst() ? nullStaticInstPtr :
+                        head_inst->staticInst);
+        } else {
+            DPRINTF(RunaheadCommit,
+                    "[tid:%i] [sn:%llu] %s fault ignored, inst is runahead\n",
+                    tid, head_inst->seqNum, inst_fault->name());
+        }
 
         // Exit state update mode to avoid accidental updating.
         thread[tid]->noSquashFromTC = false;
@@ -1379,22 +1459,17 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
                 tid, head_inst->seqNum, head_inst->pcState());
     }
 
-    for (int i = 0; i < head_inst->numDestRegs(); i++) {
-        // Update the commit rename map
-        renameMap[tid]->setEntry(head_inst->flattenedDestIdx(i),
-                                 head_inst->renamedDestIdx(i));
-
+    // Update the commit rename map
+    // Runahead instructions don't update the map as the CPU is pseudoretiring, not really committing
+    if (!head_inst->isRunahead()) {
+        for (int i = 0; i < head_inst->numDestRegs(); i++)
+            renameMap[tid]->setEntry(head_inst->flattenedDestIdx(i),
+                                    head_inst->renamedDestIdx(i));
+    } else if (head_inst->isPoisoned()) {
         // Sanity check
-        // If the inst was poisoned writeback should have poisoned all destination regs
-        // Except for invalid regs, which are never poisoned
-        if (head_inst->isPoisoned())
+        for (int i = 0; i < head_inst->numDestRegs(); i++)
             assert(cpu->regPoisoned(head_inst->renamedDestIdx(i)) ||
                    head_inst->renamedDestIdx(i)->classValue() == InvalidRegClass);
-    }
-
-    // Incremental update of arch checkpoint
-    if (!head_inst->isRunahead() && !cpu->isArchSquashPending(tid)) {
-        cpu->updateArchCheckpoint(tid, head_inst);
     }
 
     // hardware transactional memory
@@ -1479,7 +1554,7 @@ Commit::updateComInstStats(const DynInstPtr &inst)
 
     if (!inst->isMicroop() || inst->isLastMicroop()) {
         stats.instsCommitted[tid]++;
-        if (cpu->inRunahead(tid)) {
+        if (inst->isRunahead()) {
             stats.instsPseudoretired[tid]++;
             cpu->instsPseudoretired++;
 

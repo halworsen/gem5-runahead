@@ -222,13 +222,7 @@ bool
 LSQ::sendToRunaheadCache(PacketPtr pkt)
 {
     LSQRequest *request = dynamic_cast<LSQRequest*>(pkt->senderState);
-    assert(request->isRunahead());
-    // Runahead stores can writeback outside of runahead if they were commited before runahead exited
-    if (pkt->isRead()) {
-        ThreadID tid = request->instruction()->threadNumber;
-        assert(cpu->inRunahead(tid) || cpu->isArchSquashPending(tid));
-    }
-    assert(request->instruction()->isRunahead());
+    assert(request->isRunahead() && request->instruction()->isRunahead());
 
     PacketPtr rCachePkt = runaheadCache->handlePacket(pkt);
     if (rCachePkt == nullptr)
@@ -249,7 +243,7 @@ LSQ::sendToRunaheadCache(PacketPtr pkt)
         },
         csprintf("reCachePktResp.%#x", rCachePkt->getAddr()), true);
     // RETODO: make rcache delay configurable
-    cpu->schedule(event, curTick() + 1);
+    cpu->schedule(event, cpu->clockEdge(Cycles(1)));
 
     return true;
 }
@@ -489,7 +483,7 @@ LSQ::recvTimingResp(PacketPtr pkt)
     }
 
     // Update the LSQRequest state (this may delete the request)
-    request->packetReplied();
+    request->packetReplied(pkt);
 
     if (waitingForStaleTranslation) {
         checkStaleTranslations();
@@ -1261,7 +1255,7 @@ bool
 LSQ::SingleDataRequest::recvTimingResp(PacketPtr pkt)
 {
     // If the request was sent to runahead cache we expect 2 packets, otherwise just 1
-    assert(_numOutstandingPackets >= 1 && _numOutstandingPackets <= 2);
+    assert(_numOutstandingPackets == 1 || _numOutstandingPackets == 2);
 
     // If packets were sent to Rcache, we only complete the request if the packet is from Rcache
     // The Dcache packet is simply dropped
@@ -1271,8 +1265,8 @@ LSQ::SingleDataRequest::recvTimingResp(PacketPtr pkt)
             assert(pkt == _rCachePackets.front());
             flags.set(Flag::Complete);
             _port.completeDataAccess(pkt);
-        }
-    } else if (!rCacheExpected()) {
+        } // maybe else: delete pkt? idk if the packet is GC'd or freed elsewhere
+    } else {
         assert(pkt == _packets.front());
         flags.set(Flag::Complete);
         _port.completeDataAccess(pkt);
@@ -1295,6 +1289,8 @@ LSQ::SplitDataRequest::recvTimingResp(PacketPtr pkt)
         pktIdx++;
     assert(pktIdx < packetVec.size());
 
+    // If we sent packets to R-cache, only count R-cache packets towards completion
+    // Any D-cache packets are ignored
     bool completeAccess = false;
     if (rCacheExpected() && isRCachePacket(pkt)) {
         numReceivedRCachePackets++;
@@ -1316,6 +1312,12 @@ LSQ::SplitDataRequest::recvTimingResp(PacketPtr pkt)
             resp->dataStatic(_data);
         }
         resp->senderState = this;
+
+        // Kind of a hack, but needed to make the request recognize the packet as an R-cache packet
+        // This is because we're assembling a new packet instead of using the original ones
+        if (rCacheExpected())
+            pushRCachePacket(resp);
+
         _port.completeDataAccess(resp);
         delete resp;
     }
@@ -1329,10 +1331,8 @@ LSQ::SingleDataRequest::buildPackets()
 {
     /* Retries do not create new packets. */
     if (_packets.size() == 0) {
-        _packets.push_back(
-                isLoad()
-                    ?  Packet::createRead(req())
-                    :  Packet::createWrite(req()));
+        PacketPtr pkt = isLoad() ?  Packet::createRead(req()) : Packet::createWrite(req());
+        _packets.push_back(pkt);
         _packets.back()->dataStatic(_inst->memData);
         _packets.back()->senderState = this;
 
@@ -1399,6 +1399,7 @@ LSQ::SplitDataRequest::buildPackets()
             }
             pkt->senderState = this;
             _packets.push_back(pkt);
+            _unsentPackets.push(pkt);
 
             // hardware transactional memory
             // If request originates in a transaction,
@@ -1425,19 +1426,27 @@ void
 LSQ::SingleDataRequest::sendPacketToCache()
 {
     assert(_numOutstandingPackets == 0);
-    if (lsqUnit()->trySendPacket(isLoad(), _packets.at(0)))
-        _numOutstandingPackets++;
+    _numOutstandingPackets += lsqUnit()->trySendPacket(isLoad(), _packets.at(0));
 }
 
 void
 LSQ::SplitDataRequest::sendPacketToCache()
 {
-    /* Try to send the packets. */
-    while (numReceivedPackets + _numOutstandingPackets < _packets.size() &&
-            lsqUnit()->trySendPacket(isLoad(),
-                _packets.at(numReceivedPackets + _numOutstandingPackets))) {
-        _numOutstandingPackets++;
+    while (_unsentPackets.size() > 0) {
+        PacketPtr pkt = _unsentPackets.front();
+        int packetsSent = lsqUnit()->trySendPacket(isLoad(), pkt);
+        if (packetsSent == 0)
+            break;
+        _numOutstandingPackets += packetsSent;
+        _unsentPackets.pop();
     }
+
+    // legacy send
+    // while (numReceivedPackets + _numOutstandingPackets < _packets.size() &&
+    //         lsqUnit()->trySendPacket(isLoad(),
+    //             _packets.at(numReceivedPackets + _numOutstandingPackets))) {
+    //     _numOutstandingPackets++;
+    // }
 }
 
 Cycles

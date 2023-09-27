@@ -382,10 +382,11 @@ class LSQUnit
 
   public:
     /** Attempts to send a packet to the cache.
-     * Check if there are ports available. Return true if
-     * there are, false if there are not.
+     * Check if there are ports available. Return the amount
+     * of packets that were sent (1 if sent to D-cache/R-cache only,
+     * 2 if sent to both D-cache and R-cache)
      */
-    bool trySendPacket(bool isLoad, PacketPtr data_pkt);
+    int trySendPacket(bool isLoad, PacketPtr data_pkt);
 
 
     /** Debugging function to dump instructions in the LSQ. */
@@ -525,7 +526,7 @@ class LSQUnit
         statistics::Scalar squashedLoads;
 
         /** Total number of responses from the memory system that are
-         * ignored due to the instruction already being squashed. */
+         * ignored due to the instruction already being squashed or a stale runahead reply. */
         statistics::Scalar ignoredResponses;
 
         /** Tota number of memory ordering violations. */

@@ -128,7 +128,7 @@ class Commit
     ProbePointArg<DynInstPtr> *ppSquash;
 
     /** Mark the thread as processing a trap. */
-    void processTrapEvent(ThreadID tid);
+    void processTrapEvent(ThreadID tid, bool wasRunahead);
 
   public:
     /** Construct a Commit with the given parameters. */
@@ -221,6 +221,9 @@ class Commit
      */
     void generateTCEvent(ThreadID tid);
 
+    /** Signal commit that the given thread should exit runahead as soon as possible */
+    void signalExitRunahead(ThreadID tid, const DynInstPtr &inst);
+
   private:
     /** Updates the overall status of commit with the nextStatus, and
      * tell the CPU if commit is active/inactive.
@@ -244,6 +247,9 @@ class Commit
 
     /** Handles a squash from a squashAfter() request. */
     void squashFromSquashAfter(ThreadID tid);
+
+    /** Handles a squash from runahead exiting */
+    void squashFromRunaheadExit(ThreadID tid);
 
     /**
      * Handle squashing from instruction with SquashAfter set.
@@ -363,6 +369,18 @@ class Commit
 
     /** Records if a thread has to squash this cycle due to an XC write. */
     bool tcSquash[MaxThreads];
+
+    /** Records if a thread should exit runahead this cycle */
+    bool exitRunahead[MaxThreads];
+
+    /** 
+     * Records whether or not the CPU was in runahead last cycle.
+     * Used to determine if certain squashes must be ignored due to being stale.
+    */
+    bool wasRunahead[MaxThreads];
+
+    /** The cause of the runahead period that is about to be exited */
+    std::array<DynInstPtr, MaxThreads> runaheadCause;
 
     /**
      * Instruction passed to squashAfter().

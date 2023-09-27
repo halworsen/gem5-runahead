@@ -49,5 +49,19 @@ UnifiedFreeList::UnifiedFreeList(const std::string &_my_name,
     regFile->initFreeList(this);
 }
 
+void
+UnifiedFreeList::reset()
+{
+    // First, clear all the individual free lists
+    for (int regTypeIdx = 0; regTypeIdx < freeLists.size(); regTypeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(regTypeIdx);
+        freeLists[regType].clear();
+    }
+
+    // Then have the register file re-initialize the free list,
+    // adding every physreg to the free list
+    regFile->initFreeList(this);
+}
+
 } // namespace runahead
 } // namespace gem5

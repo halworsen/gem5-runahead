@@ -543,13 +543,15 @@ CPU::CPUStats::CPUStats(CPU *cpu)
 void
 CPU::tick()
 {
-    DPRINTF(O3CPU, "\n\nRunaheadCPU: Ticking main, RunaheadCPU.\n");
+    offTick = false;
+
+    DPRINTF(O3CPU, "\n\n===== TICK STARTS =====\nRunaheadCPU: Ticking main, RunaheadCPU.\n");
     assert(!switchedOut());
     assert(drainState() != DrainState::Drained);
 
     ++baseStats.numCycles;
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
-
+    
 //    activity = false;
 
     //Tick each of the stages
@@ -587,8 +589,8 @@ CPU::tick()
             lastRunningCycle = curCycle();
             cpuStats.timesIdled++;
         } else {
+            DPRINTF(O3CPU, "Scheduling next tick!\n")
             schedule(tickEvent, clockEdge(Cycles(1)));
-            DPRINTF(O3CPU, "Scheduling next tick!\n");
         }
     }
 
@@ -596,6 +598,9 @@ CPU::tick()
         updateThreadPriority();
 
     tryDrain();
+
+    DPRINTF(O3CPU, "\n===== TICK ENDS =====\n\n");
+    offTick = true;
 }
 
 void
@@ -1050,8 +1055,6 @@ CPU::drainResume()
             DPRINTF(Drain, "Activating thread: %i\n", i);
             activateThread(i);
             _status = Running;
-            // if (archSquashPending[i])
-            //     restoreCheckpointState(i);
         }
     }
 
@@ -1547,6 +1550,39 @@ CPU::dumpInsts()
     }
 }
 
+void
+CPU::dumpArchRegs(ThreadID tid)
+{
+    cprintf("[tid:%i] Dumping architectural registers\n", tid);
+
+    const auto &regClasses = isa[0]->regClasses();
+    for (int regTypeIdx = 0; regTypeIdx <= MiscRegClass; regTypeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(regTypeIdx);
+        if (regType == VecRegClass || regType == VecPredRegClass)
+            continue;
+
+        RegClass regClass = regClasses.at(regType);
+        size_t numRegs = regClass.numRegs();
+
+        for (RegIndex archIdx = 0; archIdx < numRegs; archIdx++) {
+            RegId archReg(regType, archIdx);
+            RegVal val;
+            if (regType == MiscRegClass) {
+                // x86 specific
+                if (!TheISA::misc_reg::isValid(archIdx))
+                    continue;
+                val = readMiscReg(archIdx, tid);
+            } else {
+                val = getArchReg(archReg, tid);
+            }
+
+            cprintf("%s | %s: %s\n",
+                    archReg.className(), regClass.regName(archReg),
+                    regClass.valString(&val));
+        }
+    }
+}
+
 bool
 CPU::canEnterRunahead(ThreadID tid)
 {
@@ -1577,12 +1613,19 @@ CPU::enterRunahead(ThreadID tid)
     if (!canEnterRunahead(tid))
         return;
 
-    const DynInstPtr &robHead = rob.readHeadInst(tid);
+    DynInstPtr robHead = rob.readHeadInst(tid);
     assert(robHead->isLoad());
 
     DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead, caused by sn:%llu (PC %s).\n",
                          tid, robHead->seqNum, robHead->pcState());
 
+    // DEBUG - dump before runahead starts
+    //dumpArchRegs(tid);
+    // Also debug, save regs in a simple way to make sure they're the same on exit
+    saveStateForValidation(tid);
+    archStateCheckpoint.fullSave(tid);
+
+    DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to runahead.\n", tid);
     inRunahead(tid, true);
     // Store the instruction that caused entry into runahead
     runaheadCause[tid] = robHead;
@@ -1613,22 +1656,22 @@ CPU::enterRunahead(ThreadID tid)
 }
 
 void
+CPU::runaheadLLLReturn(ThreadID tid)
+{
+    DPRINTF(RunaheadCPU, "[tid:%i] Signalling to commit that runahead can be exited.\n", tid);
+    const DynInstPtr &lll = runaheadCause[tid];
+    commit.signalExitRunahead(tid, lll);
+}
+
+void
 CPU::exitRunahead(ThreadID tid)
 {
     DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead. Instructions pseudoretired: %i\n",
                          tid, instsPseudoretired);
+
+    // Resume normal mode
+    DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to normal.\n", tid);
     inRunahead(tid, false);
-
-    // Squash every instruction after the LLL that caused runahead
-    const DynInstPtr squashInst = runaheadCause[tid];
-    DPRINTF(RunaheadCPU, "[tid:%i] Restoring state, squashing to and including [sn:%llu], PC %s.\n",
-                         tid, squashInst->seqNum, squashInst->pcState());
-
-    // When the squash finished, commit will inform the CPU to restore the architectural state.
-    iew.squashDueToRunahead(squashInst, tid);
-    //drain();
-    // Signal that the CPU is pending an architectural state checkpoint restore once squash is done
-    archSquashPending[tid] = true;
 }
 
 void
@@ -1649,14 +1692,38 @@ CPU::restoreCheckpointState(ThreadID tid)
 {
     DPRINTF(RunaheadCPU, "[tid:%i] Restoring architectural state after runahead squash.\n", tid);
 
-    // But first, a string of sanity checks:
-    // We shouldn't be in runahead anymore
-    assert(!inRunahead(tid));
-    // The ROB should be completely squashed or drained
-    rob.archRestoreSanityCheck();
-    for (DynInstPtr inst : instList) {
-        // There should be no unsquashed runahead instructions in the instruction window whatsoever
-        assert(!inst->isRunahead() || inst->isSquashed());
+    // The ROB should be squashing, empty or fully squashed
+    rob.archRestoreSanityCheck(tid);
+
+    // Reset the free list
+    freeList->reset();
+    // Reset the rename maps
+    const BaseISA::RegClasses &regClasses = isa[tid]->regClasses();
+    // TODO: this grabs 2 physregs for each arch reg, one for rename and one for commit
+    // this essentially nukes a full set of archregs from the phys regfile
+    renameMap[tid]->reset(regClasses);
+    commitRenameMap[tid]->reset(regClasses);
+
+    // Clear the rename history buffer to prevent any rename undo shenanigans
+    // The history buffer should be empty already, but better safe than sorry!
+    rename.clearHistory(tid);
+
+    // Re-initialize the rename maps to be rN -> rN
+    // TODO: this assumes 1 active thread. see CPU constructor
+    for (int typeIdx = 0; typeIdx <= CCRegClass; typeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(typeIdx);
+        size_t numRegs = regClasses.at(regType).numRegs();
+        for (RegIndex archIdx = 0; archIdx < numRegs; ++archIdx) {
+            RegId archReg = RegId(regType, archIdx);
+            PhysRegIdPtr physReg = freeList->getReg(regType);
+
+            // Rename maps will agree after runahead exits
+            renameMap[tid]->setEntry(archReg, physReg);
+            commitRenameMap[tid]->setEntry(archReg, physReg);
+
+            // Fix the scoreboard while we're at it
+            scoreboard->setReg(physReg);
+        }
     }
 
     // Restore architectural registers
@@ -1665,7 +1732,10 @@ CPU::restoreCheckpointState(ThreadID tid)
     regFile.clearPoison();
     possiblyDiverging(tid, false);
 
-    archSquashPending[tid] = false;
+    // DEBUG - dump arch regs after checkpoint restore
+    //dumpArchRegs(tid);
+    // Also debug, validate that all checkpoints were successfully restored
+    checkStateForValidation(tid);
 }
 
 bool
@@ -1676,7 +1746,7 @@ CPU::instCausedRunahead(const DynInstPtr &inst)
     if (!inRunahead(tid))
         return false;
 
-    return inst == runaheadCause[tid];
+    return (inst == runaheadCause[tid]);
 }
 
 void
@@ -1684,14 +1754,20 @@ CPU::updateArchCheckpoint(ThreadID tid, const DynInstPtr &inst)
 {
     if (!runaheadEnabled)
         return;
-    // Arch state checkpointing should never occur in runahead
-    assert(!inRunahead(tid) && !isArchSquashPending(tid));
+    assert(!inRunahead(tid));
 
     DPRINTF(RunaheadCheckpoint, "[tid:%i] [sn:%llu] Update arch checkpoint to PC %s\n",
                                 tid, inst->seqNum, inst->pcState());
 
+    // Update normal regs
     for (int i = 0; i < inst->numDestRegs(); i++) {
         archStateCheckpoint.updateReg(tid, inst->flattenedDestIdx(i));
+    }
+
+    // Update any misc regs that were also touched by the instruction
+    for (int i = 0; i < inst->numMiscDestRegs(); i++) {
+        const RegId miscReg = inst->miscRegIdx(i);
+        archStateCheckpoint.updateReg(tid, miscReg);
     }
 }
 
@@ -1755,6 +1831,93 @@ CPU::regPoisoned(PhysRegIdPtr physReg, bool poisoned)
                 physReg->index(), physReg->flatIndex(), physReg->className());
     }
     regFile.regPoisoned(physReg, poisoned);
+}
+
+void
+CPU::saveStateForValidation(ThreadID tid)
+{
+    const auto &regClasses = isa[0]->regClasses();
+    for (int regTypeIdx = 0; regTypeIdx <= CCRegClass; regTypeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(regTypeIdx);
+
+        // Don't save vecreg and vecpredreg
+        if (regType == VecRegClass || regType == VecPredRegClass)
+            continue;
+
+        RegClass regClass = regClasses.at(regType);
+        size_t numRegs = regClass.numRegs();
+
+        _debugRegVals[regType].clear();
+        _debugRegVals[regType].resize(numRegs);
+
+        for (RegIndex archIdx = 0; archIdx < numRegs; archIdx++) {
+            RegId archReg(regType, archIdx);
+
+            // Save arch reg values
+            RegVal val = getArchReg(archReg, tid);
+            _debugRegVals[regType].at(archIdx) = val;
+        }
+    }
+
+    // Save misc regs
+    size_t numMiscRegs = regClasses.at(MiscRegClass).numRegs();
+    _debugRegVals[MiscRegClass].clear();
+    _debugRegVals[MiscRegClass].resize(numMiscRegs);
+
+    for (RegIndex regIdx = 0; regIdx < numMiscRegs; regIdx++) {
+        // x86 specific
+        if (!TheISA::misc_reg::isValid(regIdx))
+            continue;
+        RegVal val = readMiscReg(regIdx, tid);
+        _debugRegVals[MiscRegClass].at(regIdx) = val;
+    }
+}
+
+void
+CPU::checkStateForValidation(ThreadID tid)
+{
+    // Check normal registers and the rename map
+    const auto &regClasses = isa[0]->regClasses();
+    for (int regTypeIdx = 0; regTypeIdx <= CCRegClass; regTypeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(regTypeIdx);
+
+        // Don't save vecreg and vecpredreg
+        if (regType == VecRegClass || regType == VecPredRegClass)
+            continue;
+
+        RegClass regClass = regClasses.at(regType);
+        size_t numRegs = regClass.numRegs();
+
+        for (RegIndex archIdx = 0; archIdx < numRegs; archIdx++) {
+            RegId archReg(regType, archIdx);
+
+            RegVal val = getArchReg(archReg, tid);
+            RegVal storedVal = _debugRegVals[regType].at(archIdx);
+            if (storedVal != val) {
+                panic("Stored register mismatch: %s %s - (cur) %s != %s (stored)\n",
+                      archReg.className(), regClass.regName(archReg),
+                      regClass.valString(&val), regClass.valString(&storedVal));
+            }
+        }
+    }
+
+    // Check misc reg values
+    RegClass miscRegClass = regClasses.at(MiscRegClass);
+    size_t numMiscRegs = miscRegClass.numRegs();
+    for (RegIndex regIdx = 0; regIdx < numMiscRegs; regIdx++) {
+        // x86 specific
+        if (!TheISA::misc_reg::isValid(regIdx))
+            continue;
+
+        RegId archReg(MiscRegClass, regIdx);
+        RegVal val = readMiscReg(regIdx, tid);
+        RegVal storedVal = _debugRegVals[MiscRegClass].at(regIdx);
+        if (storedVal != val) {
+            DPRINTF(RunaheadCPU, "Stored misc register mismatch: %s %s - (cur) %s != %s (stored)\n",
+                  archReg.className(), miscRegClass.regName(archReg),
+                  miscRegClass.valString(&val), miscRegClass.valString(&storedVal));
+        }
+    }
 }
 
 void

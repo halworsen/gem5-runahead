@@ -437,10 +437,10 @@ Rename::tick()
         ThreadID tid = *threads++;
 
         // If we committed this cycle then doneSeqNum will be > 0
+        // Remove committed instructions' rename history entry
         if (fromCommit->commitInfo[tid].doneSeqNum != 0 &&
             !fromCommit->commitInfo[tid].squash &&
             renameStatus[tid] != Squashing) {
-
             removeFromHistory(fromCommit->commitInfo[tid].doneSeqNum,
                                   tid);
         }
@@ -551,7 +551,7 @@ Rename::renameInsts(ThreadID tid)
     // Check if there's any space left.
     if (min_free_entries <= 0) {
         DPRINTF(Rename,
-                "[tid:%i] Blocking due to no free ROB/IQ/ entries.\n"
+                "[tid:%i] Blocking due to no free ROB/IQ entries.\n"
                 "ROB has %i free entries.\n"
                 "IQ has %i free entries.\n",
                 tid, free_rob_entries, free_iq_entries);
@@ -943,11 +943,16 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
         // waste of time to update the rename table, we definitely
         // don't want to put these on the free list.
         if (hb_it->newPhysReg != hb_it->prevPhysReg) {
+            DPRINTF(Rename, "\tUndoing %s rename. Previous rename: %d -> %d, new rename: %d -> %d.\n",
+                            hb_it->archReg.className(),
+                            hb_it->archReg.index(), renameMap[tid]->lookup(hb_it->archReg)->index(),
+                            hb_it->archReg.index(), hb_it->prevPhysReg->index());
             // Tell the rename map to set the architected register to the
             // previous physical register that it was renamed to.
             renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
 
             // Put the renamed physical register back on the free list.
+            DPRINTF(Rename, "\tFreeing physReg %i\n", hb_it->newPhysReg->index());
             freeList->addReg(hb_it->newPhysReg);
         }
 

@@ -67,7 +67,7 @@ RunaheadCache::write(PacketPtr pkt)
     assert(pkt->isWrite());
 
     Addr addr = pkt->getAddr();
-    DPRINTF(RCache, "Performing R-cache write to block %llu (addr %#x, unaligned %#x).",
+    DPRINTF(RCache, "Performing R-cache write to block %llu (addr %#x, unaligned %#x).\n",
             getIndex(addr), align(addr), addr);
 
     CacheBlock &block = cacheEntries[getIndex(addr)];
@@ -152,11 +152,12 @@ RunaheadCache::invalidateCache()
 PacketPtr
 RunaheadCache::handlePacket(PacketPtr pkt)
 {
-    DPRINTF(RCache, "R-cache received packet (addr %#x). Read: %i\n",
-            pkt->getAddr(), pkt->isRead());
+    DPRINTF(RCache, "R-cache received %s packet (addr %#x)\n",
+            pkt->isRead() ? "read" : "write", pkt->getAddr());
     ++rCacheStats.packetsHandled;
 
     PacketPtr respPkt = new Packet(*pkt);
+    // maybe copy the data as well to ensure Dcache doesn't overwrite the reply later
     if (respPkt->isWrite()) {
         write(respPkt);
     } else if (respPkt->isRead()) {

@@ -94,7 +94,7 @@ class SimpleRenameMap
      * it's awkward to initialize this object via the constructor.
      * Instead, this method is used for initialization.
      */
-    void init(const RegClass &reg_class, SimpleFreeList *_freeList);
+    void init(const RegClass &reg_class, SimpleFreeList *freeList);
 
     /**
      * Pair of a physical register and a physical register.  Used to
@@ -158,6 +158,9 @@ class SimpleRenameMap
     const_iterator end() const { return map.end(); }
     const_iterator cend() const { return map.cend(); }
     /** @} */
+
+    /** Reset the rename map. Every entry will be set to rN -> rN */
+    void reset(size_t numRegs);
 
     /** Print the rename map */
     void dump();
@@ -287,6 +290,9 @@ class UnifiedRenameMap
     {
         return renameMaps[type].numFreeEntries();
     }
+
+    /** Reset the rename map. The free list should be reset before this. */
+    void reset(const BaseISA::RegClasses &regClasses);
 
     /**
      * Return whether there are enough registers to serve the request.

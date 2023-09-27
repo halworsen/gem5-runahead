@@ -533,7 +533,7 @@ class LSQ
         }
 
         void
-        packetReplied()
+        packetReplied(PacketPtr pkt)
         {
             assert(_numOutstandingPackets > 0);
             _numOutstandingPackets--;
@@ -575,12 +575,7 @@ class LSQ
         void setPoisoned() { flags.set(Flag::Poisoned); };
         bool isPoisoned() { return flags.isSet(Flag::Poisoned); };
 
-        void
-        pushRCachePacket(PacketPtr pkt)
-        {
-            _numOutstandingPackets++;
-            _rCachePackets.push_back(pkt);
-        }
+        void pushRCachePacket(PacketPtr pkt) { _rCachePackets.push_back(pkt); };
 
         bool
         isRCachePacket(PacketPtr pkt)
@@ -593,6 +588,7 @@ class LSQ
                 if (rCachePkt == pkt)
                     return true;
             }
+
             return false;
         }
 
@@ -655,6 +651,7 @@ class LSQ
     class SplitDataRequest : public LSQRequest
     {
       protected:
+        std::queue<PacketPtr> _unsentPackets;
         uint32_t numFragments;
         uint32_t numReceivedPackets;
         uint32_t numReceivedRCachePackets;

@@ -140,15 +140,16 @@ ROB::drainSanityCheck() const
 }
 
 void
-ROB::archRestoreSanityCheck()
+ROB::archRestoreSanityCheck(ThreadID tid)
 {
-    for (ThreadID tid = 0; tid  < numThreads; tid++)
-    {
-        for (DynInstPtr inst : instList[tid])
-        {
-            assert(inst->isSquashed());
+    bool allSquashed = true;
+    for (DynInstPtr inst : instList[tid]) {
+        if (!inst->isSquashed()) {
+            allSquashed = false;
+            break;
         }
     }
+    assert(!isDoneSquashing() || isEmpty() || allSquashed);
 }
 
 void

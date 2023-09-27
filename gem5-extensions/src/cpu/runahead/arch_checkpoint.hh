@@ -21,44 +21,45 @@ class CPU;
  * Mainly, this checkpoints the architectural registers. Other physical registers are ignored
  * as the CPU must resume at fetch after exiting runahead anyways, so rename will reclaim
  * all other physical registers.
- * 
- * For performance reasons, the branch predictor's branch history and return address stack are
- * also saved in architectural checkpoints.
  */
 class ArchCheckpoint
 {
 private:
+    struct RegCheckpoint {
+        /** The checkpointed values */
+        std::vector<RegVal> values;
+        /** Indices of valid checkpoint */
+        std::list<RegIndex> validIdxs;
+    };
+
     /** The CPU whose state is checkpointed */
     CPU *cpu;
 
-    /** Architectural register checkpoint file */
-    PhysRegFile regFile;
+    /** The amount of threads in use */
+    ThreadID numThreads;
 
-    /** Hardcoded/predetermined rename maps to use with the checkpointed register file */
-    UnifiedRenameMap renameMap;
-
-    /** Hardcoded/predetermined free reg list */
-    UnifiedFreeList freeList;
-
-    /** Hardcoded/predetermined scoreboard of free registers */
-    Scoreboard scoreboard;
-
-    /** Starting flat indices per register type */
-    std::array<uint16_t, CCRegClass> typeFlatIndices;
-
-    /** Stored misc register values */
-    std::vector<RegVal> miscRegs;
+    /**
+     * Checkpointed architectural register values
+     * Index into this with the register class, then register arch index
+     */
+    std::array<RegCheckpoint, MiscRegClass + 1> registerCheckpoints;
 
 public:
     ArchCheckpoint(CPU *cpu, const BaseRunaheadCPUParams &params);
 
-    /** Save the full current architectural state of the CPU */
-    void fullSave(ThreadID tid);
-
     /** Restore the architectural state of the CPU */
     void restore(ThreadID tid);
 
-    /** Update the checkpoint of a single architectural register */
+    /**
+     * Checkpoints /all/ registers at once
+     * This includes normal registers and all valid miscellaneous registers
+     */
+    void fullSave(ThreadID tid);
+
+    /**
+     * Update the checkpoint of a single architectural register
+     * Looks up the current physical register tied to the arch registers and saves it
+     */
     void updateReg(ThreadID tid, RegId archReg);
 };
 

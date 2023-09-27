@@ -225,6 +225,9 @@ struct TimeStruct
     bool renameUnblock[MaxThreads];
     bool iewBlock[MaxThreads];
     bool iewUnblock[MaxThreads];
+
+    /** Whether or not an arch restore should be performed at the end of the cycle */
+    bool archRestore[MaxThreads];
 };
 
 } // namespace runahead

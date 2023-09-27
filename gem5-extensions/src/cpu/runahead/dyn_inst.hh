@@ -189,6 +189,7 @@ class DynInst : public ExecContext, public RefCounted
         HtmFromTransaction,
         Poisoned,
         Runahead,
+        ForgedResponse,
         MaxFlags,
     };
 
@@ -286,6 +287,13 @@ class DynInst : public ExecContext, public RefCounted
     prevDestIdx(int idx, PhysRegIdPtr phys_reg_id)
     {
         _prevDestIdx[idx] = phys_reg_id;
+    }
+
+    // Get the the idx'th misc destination register
+    const RegId
+    miscRegIdx(int idx)
+    {
+        return RegId(MiscRegClass, _destMiscRegIdx[idx]);
     }
 
     // Returns the physical register index of the i'th source register.
@@ -682,6 +690,9 @@ class DynInst : public ExecContext, public RefCounted
     /** Returns the number of destination registers. */
     size_t numDestRegs() const { return numDests(); }
 
+    /** Returns the number of destination misc registers. */
+    size_t numMiscDestRegs() const { return _destMiscRegIdx.size(); }
+
     size_t
     numDestRegs(RegClassType type) const
     {
@@ -852,8 +863,8 @@ class DynInst : public ExecContext, public RefCounted
     void
     setPoisoned()
     {
-        // Poison should only be propagated in runahead or while the CPU is waiting to restore state
-        assert(cpu->inRunahead(threadNumber) || cpu->isArchSquashPending(threadNumber));
+        // Poison should only be propagated in runahead
+        assert(isRunahead());
         instFlags.set(Poisoned);
     }
 
@@ -864,7 +875,7 @@ class DynInst : public ExecContext, public RefCounted
     void
     setRunahead()
     {
-        // No insts should be marked as runahead if an arch squash is pending
+        // We shouldn't create runahead instructions in normal mode
         assert(cpu->inRunahead(threadNumber));
         instFlags.set(Runahead);
         if (hasRequest() && savedRequest != nullptr)
@@ -873,6 +884,17 @@ class DynInst : public ExecContext, public RefCounted
 
     /** Returns whether or not this instruction is a runahead instruction */
     bool isRunahead() const { return instFlags[Runahead]; }
+
+    /** Marks this instruction as having been issued a forged cache reply. */
+    void
+    setForgedResponse()
+    {
+        assert(isRunahead() && isLoad());
+        instFlags.set(ForgedResponse);
+    }
+
+    /** Returns whether or not this instruction has been issued a forged cache reply. */
+    bool hasForgedResponse() const { return instFlags[ForgedResponse]; }
 
     /** Sets the destination registers as renamed */
     void
@@ -1101,6 +1123,7 @@ class DynInst : public ExecContext, public RefCounted
         thread->noSquashFromTC = no_squash_from_TC;
     }
 
+    /** Forward register values from the old arch regs to the new ones */
     void
     forwardOldRegs()
     {

@@ -108,7 +108,7 @@ class ROB
     void drainSanityCheck() const;
 
     /** Sanity checks before a arch state restore */
-    void archRestoreSanityCheck();
+    void archRestoreSanityCheck(ThreadID tid);
 
     /** Takes over another CPU's thread. */
     void takeOverFrom();
@@ -256,7 +256,14 @@ class ROB
     /** Checks if the ROB is still in the process of squashing instructions for
      *  any thread.
      */
-    bool isDoneSquashing();
+    bool isDoneSquashing()
+    {
+        for (ThreadID tid = 0; tid < MaxThreads; tid++) {
+            if (!doneSquashing[tid])
+                return false;
+        }
+        return true;
+    };
 
     /** This is more of a debugging function than anything.  Use
      *  numInstsInROB to get the instructions in the ROB unless you are

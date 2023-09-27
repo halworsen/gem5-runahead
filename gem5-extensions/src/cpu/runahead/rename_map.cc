@@ -105,6 +105,13 @@ SimpleRenameMap::rename(const RegId& arch_reg)
 }
 
 void
+SimpleRenameMap::reset(size_t numRegs)
+{
+    map.clear();
+    map.resize(numRegs);
+}
+
+void
 SimpleRenameMap::dump()
 {
     for (int archIdx = 0; archIdx < map.size(); archIdx++) {
@@ -153,6 +160,18 @@ UnifiedRenameMap::dump()
         RegId dummyReg((RegClassType)typeIdx, 0);
         cprintf("Rename map for reg type %s (arch -> phys):\n", dummyReg.className());
         renameMaps[typeIdx].dump();
+    }
+}
+
+void
+UnifiedRenameMap::reset(const BaseISA::RegClasses &regClasses)
+{
+    for (int typeIdx = 0; typeIdx < renameMaps.size(); typeIdx++) {
+        RegClassType regType = static_cast<RegClassType>(typeIdx);
+        size_t numRegs = regClasses.at(regType).numRegs();
+
+        // Reset the individual rename maps (clear them)
+        renameMaps[regType].reset(numRegs);
     }
 }
 

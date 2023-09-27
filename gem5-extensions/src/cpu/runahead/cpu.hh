@@ -389,6 +389,9 @@ class CPU : public BaseCPU
     /** Debug function to print all instructions on the list. */
     void dumpInsts();
 
+    /** Debug function to print all architectural registers */
+    void dumpArchRegs(ThreadID tid);
+
 private:
     /** Whether or not runahead is enabled */
     bool runaheadEnabled;
@@ -396,24 +399,42 @@ private:
     /** Tracks which threads are in runahead */
     bool runaheadStatus[MaxThreads];
 
+    /**
+     * True if the CPU is not currently processing a cycle (i.e. the CPU is between ticks)
+     * Mostly for debugging purposes (e.g. setting breakpoints on events that happen off-tick)
+    */
+    bool offTick;
+
     /** Whether or not the CPU is possibly diverging from correct execution */
     bool branchDivergence[MaxThreads];
 
-    /**
-     * Whether or not an arch state checkpoint restore is currently pending
-     * This happens after the pipeline is flushed by a runahead exit
-     */
-    bool archSquashPending[MaxThreads];
+    /** Debug for saving and validating checkpointed state */
+
+    /** Architectural register values */
+    std::array<std::vector<RegVal>, MiscRegClass + 1> _debugRegVals;
+
+    /** Save any state */
+    void saveStateForValidation(ThreadID tid);
+
+    /** Check that the current CPU state matches up with the save state */
+    void checkStateForValidation(ThreadID tid);
 
 public:
     /** The instruction that caused us to enter runahead mode */
-    DynInstPtr runaheadCause[MaxThreads];
+    std::array<DynInstPtr, MaxThreads> runaheadCause;
 
     /** Check if we can enter runahead right now */
     bool canEnterRunahead(ThreadID tid);
 
     /** Enter runahead, starting from the instruction at the head of the ROB */
     void enterRunahead(ThreadID tid);
+
+    /**
+     * Signal commit that the runahead-causing LLL has returned
+     * Commit will handle the exit on the first coming cycle,
+     * which may be the same or the next cycle, depending on exactly when the load returns
+     */
+    void runaheadLLLReturn(ThreadID tid);
 
     /** Exit runahead, resuming from the instruction that caused us to enter runahead */
     void exitRunahead(ThreadID tid);
@@ -435,9 +456,6 @@ public:
 
     /** Set whether or not the given thread is possibly diverging from correct execution */
     void possiblyDiverging(ThreadID tid, bool diverging) { branchDivergence[tid] = diverging; };
-
-    /** Is an arch state restore pending? */
-    bool isArchSquashPending(ThreadID tid) { return archSquashPending[tid]; };
 
     /** Check if the given instruction caused the CPU to enter runahead */
     bool instCausedRunahead(const DynInstPtr &inst);
@@ -505,7 +523,7 @@ public:
     /** The free list. */
     UnifiedFreeList *freeList;
 
-    /** The rename map. */
+    /** The frontend rename map. */
     UnifiedRenameMap *renameMap[MaxThreads];
 
     /** The commit rename map. */

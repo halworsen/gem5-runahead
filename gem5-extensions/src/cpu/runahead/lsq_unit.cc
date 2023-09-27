@@ -115,25 +115,24 @@ LSQUnit::recvTimingResp(PacketPtr pkt)
     }
 
     // Check if the instruction that initiated the request caused runahead
-    if (cpu->instCausedRunahead(inst)) {
+    if (inst->isRunahead() && cpu->instCausedRunahead(inst)) {
         DPRINTF(RunaheadLSQ, "[tid:%i] Runahead-causing inst [sn:%llu] (PC %s) "
                              "received timing response.\n",
                              inst->threadNumber, inst->seqNum, inst->pcState());
         // If so, we can exit runahead and resume normal execution
-        cpu->exitRunahead(inst->threadNumber);
+        cpu->runaheadLLLReturn(inst->threadNumber);
     }
 
-    if (inst->isLoad() && request->isPoisoned()) {
-        DPRINTF(RunaheadLSQ, "[tid:%i] [sn:%llu] Load with PC %s was poisoned by request.\n",
-                inst->threadNumber, inst->seqNum, inst->pcState());
-        inst->setPoisoned();
+    // If the load was poisoned (for being an LLL, for instance), discard the packet.
+    // The instruction will already have completed writeback via a forged LLL response
+    if (inst->hasForgedResponse()) {
+        DPRINTF(RunaheadLSQ, "[tid:%i] [sn:%llu] Load with forged response got D-cache reply. Discarding.\n",
+                inst->threadNumber, inst->seqNum);
+        return ret;
     }
 
     // All runahead stores should be handled by runahead cache
-    // The only acceptable exception is if the store entered the instruction window
-    // before the load that caused entry into runahead
-    if (inst->isStore() && inst->isRunahead() &&
-        inst->seqNum >= cpu->runaheadCause[inst->threadNumber]->seqNum)
+    if (inst->isStore() && inst->isRunahead())
         assert(request->isRCachePacket(pkt));
 
     /* Check that the request is still alive before any further action. */
@@ -152,11 +151,15 @@ LSQUnit::forgeResponse(const DynInstPtr &inst)
     DPRINTF(RunaheadLSQ, "Forging load response for load with [sn:%llu] PC %s\n",
             inst->seqNum, inst->pcState());
     PacketPtr pkt = new Packet(*req->packet());
+    // maybe not necessary?
     memset(inst->memData, 0, req->mainReq()->getSize());
 
-    // Schedule writeback for the next cycle
+    // Schedule a fake writeback for the next cycle, using the writebackevent
+    // usually used when stores are forwarded to loads
     WritebackEvent *wb = new WritebackEvent(inst, pkt, this);
     cpu->schedule(wb, curTick());
+
+    inst->setForgedResponse();
 }
 
 void
@@ -231,30 +234,23 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
     }
 
     // If it's a memory op that was initiated during runahead but we've since exited it, track it
+    // It will be ignored during writeback
     if (request->isRunahead() && !cpu->inRunahead(inst->threadNumber)) {
         DPRINTF(RunaheadLSQ, "[sn:%llu] Stale runahead inst (PC %s) completed data access.\n",
                 inst->seqNum, inst->pcState());
         assert(inst->isRunahead());
-        // Should have been squashed already or is about to be squashed
-        // If not, the instruction is trying to complete in normal mode without having its architectural effect squashed
-        // Stores may commit (and drain!) before runahead is entered but before they are completed.
-        // So it's possible that runahead stores complete after runahead is exited again since
-        // outstanding requests are not squashed.
-        assert(inst->isSquashed() || cpu->isArchSquashPending(inst->threadNumber) || inst->isStore());
         ++stats.staleRunaheadInsts;
     }
 
     assert(!cpu->switchedOut());
 
-    // Squashed insts shouldn't writeback
-    if (inst->isSquashed())
-        return;
-
     // If we're expecting R-cache to handle this instruction,
     // we only writeback using packets from R-cache
+    // This is probably caught by the completion tracking logic of the request but better safe than sorry
     if (request->rCacheExpected() && !request->isRCachePacket(pkt))
         return;
 
+    // The inst may be executed already, for example if it is a LLL that got issued a forged writeback
     if (request->needWBToRegister()) {
         // Only loads, store conditionals and atomics perform the writeback
         // after receving the response from the memory
@@ -1204,6 +1200,7 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
     // Squashed instructions do not need to complete their access.
     if (inst->isSquashed()) {
         assert (!inst->isStore() || inst->isStoreConditional());
+        DPRINTF(LSQUnit, "Instruction is squashed, skipping writeback.\n");
         ++stats.ignoredResponses;
         return;
     }
@@ -1214,8 +1211,16 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
     ThreadID tid = inst->threadNumber;
     if (inst->isRunahead() && !cpu->inRunahead(tid)) {
         assert(!inst->isStore());
+        DPRINTF(RunaheadLSQ, "Instruction is a stale runahead instruction, skipping writeback.\n");
         ++stats.ignoredResponses;
         return;
+    }
+
+    // Check if the request/packet should poison the load (if R-cache returned poisoned data)
+    if (inst->savedRequest->isRCachePacket(pkt) && inst->savedRequest->isPoisoned()) {
+        DPRINTF(RunaheadLSQ, "[tid:%i] [sn:%llu] Inst with PC %s was poisoned by request.\n",
+                inst->threadNumber, inst->seqNum, inst->pcState());
+        inst->setPoisoned();
     }
 
     if (!inst->isExecuted()) {
@@ -1331,9 +1336,10 @@ LSQUnit::completeStore(typename StoreQueue::iterator store_idx)
     }
 }
 
-bool
+int
 LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
 {
+    int packetsSent = 0;
     bool success = true;
     bool cache_got_blocked = false;
     bool rcSuccess = false;
@@ -1351,6 +1357,8 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
             if (!dcachePort->sendTimingReq(data_pkt)) {
                 success = false;
                 cache_got_blocked = true;
+            } else {
+                packetsSent++;
             }
         } else {
             success = false;
@@ -1365,38 +1373,56 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
          * we will use that result and ignore the D-cache result.
          */
         if (request->isRunahead()) {
-            DPRINTF(RunaheadLSQ, "%s packet was successfully sent to D-cache in runahead, "
-                                 "attempting to send to R-cache.\n",
-                                 isLoad ? "Read" : "Write");
+            if (isLoad) {
+                DPRINTF(RunaheadLSQ, "Read packet was successfully sent to D-cache in runahead, "
+                                     "attempting to send to R-cache.\n");
+            } else {
+                DPRINTF(RunaheadLSQ, "Sending write packet to R-cache.\n");
+                // Runahead stores are not really considered successes as they don't send to D-cache
+                success = false;
+            }
             rcSuccess = lsq->sendToRunaheadCache(data_pkt);
+            if (rcSuccess)
+                packetsSent++;
         }
 
         if (!isLoad) {
             isStoreBlocked = false;
         }
+
         // Runahead stores don't make the cache port busy as they all go to R-cache
         if (!request->isRunahead() || isLoad)
             lsq->cachePortBusy(isLoad);
+
         request->packetSent();
     } else {
         if (cache_got_blocked) {
             lsq->cacheBlocked(true);
             ++stats.blockedByCache;
         }
+
         if (!isLoad) {
             assert(request == storeWBIt->request());
             isStoreBlocked = true;
         }
+
         request->packetNotSent();
     }
 
-    DPRINTF(LSQUnit, "Memory request (pkt: %s) from inst [sn:%llu] was"
+    if (!isLoad && rcSuccess) {
+        DPRINTF(LSQUnit, "Memory request (pkt: %s) from inst [sn:%llu] was"
+                " sent to R-cache (cache is blocked: %d, cache_got_blocked: %d)\n",
+                data_pkt->print(), request->instruction()->seqNum,
+                lsq->cacheBlocked(), cache_got_blocked);
+    } else {
+        DPRINTF(LSQUnit, "Memory request (pkt: %s) from inst [sn:%llu] was"
             " %ssent%s (cache is blocked: %d, cache_got_blocked: %d)\n",
             data_pkt->print(), request->instruction()->seqNum,
-            success ? "": "not ",  rcSuccess ? " (to R-cache, too)" : "",
+            success ? "": "not ",  rcSuccess ? " (to R-cache)" : "",
             lsq->cacheBlocked(), cache_got_blocked);
+    }
 
-    return success;
+    return packetsSent;
 }
 
 void
