@@ -589,7 +589,7 @@ CPU::tick()
             lastRunningCycle = curCycle();
             cpuStats.timesIdled++;
         } else {
-            DPRINTF(O3CPU, "Scheduling next tick!\n")
+            DPRINTF(O3CPU, "Scheduling next tick!\n");
             schedule(tickEvent, clockEdge(Cycles(1)));
         }
     }
