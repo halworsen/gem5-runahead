@@ -247,8 +247,11 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
     // If we're expecting R-cache to handle this instruction,
     // we only writeback using packets from R-cache
     // This is probably caught by the completion tracking logic of the request but better safe than sorry
-    if (request->rCacheExpected() && !request->isRCachePacket(pkt))
+    if (request->rCacheExpected() && !request->isRCachePacket(pkt)) {
+        DPRINTF(RunaheadLSQ, "[sn:%llu] Completing access with normal pkt when R-cache pkt expected. Ignoring.\n",
+                inst->seqNum, inst->pcState());
         return;
+    }
 
     // The inst may be executed already, for example if it is a LLL that got issued a forged writeback
     if (request->needWBToRegister()) {

@@ -471,6 +471,8 @@ class IEW
             statistics::Scalar numInsts;
             /** Stat for total number of executed poisoned instructions. */
             statistics::Scalar numPoisonedInsts;
+            /** Stat for total number of non-speculative instructions encountered in runahead. */
+            statistics::Scalar numNonSpecRunaheadInsts;
             /** Stat for total number of executed load instructions. */
             statistics::Vector numLoadInsts;
             /** Stat for total number of squashed instructions skipped at

@@ -1126,8 +1126,8 @@ Commit::commitInsts()
                         // If in runahead, immediately "complete" it to avoid blocking on it
                         assert(head_inst->isRunahead());
                         DPRINTF(RunaheadCommit,
-                                "[tid:%i] Load was a runahead LLL. Poisoning.\n", tid);
-                        // Tell the CPU to deal with it. This is extremely ugly. And hacky.
+                                "[tid:%i] Load was a runahead LLL. Attempting to forge response.\n", tid);
+                        // Tell the CPU to deal with it. This is kinda ugly, LSQ should handle these
                         cpu->handleRunaheadLLL(head_inst);
                     }
                 }
@@ -1468,8 +1468,9 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     } else if (head_inst->isPoisoned()) {
         // Sanity check
         for (int i = 0; i < head_inst->numDestRegs(); i++)
-            assert(cpu->regPoisoned(head_inst->renamedDestIdx(i)) ||
-                   head_inst->renamedDestIdx(i)->classValue() == InvalidRegClass);
+            assert(cpu->regPoisoned(head_inst->renamedDestIdx(i))
+                   || head_inst->renamedDestIdx(i)->classValue() == InvalidRegClass
+                   || head_inst->renamedDestIdx(i)->classValue() == MiscRegClass);
     }
 
     // hardware transactional memory

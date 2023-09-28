@@ -227,6 +227,8 @@ IEW::IEWStats::ExecutedInstStats::ExecutedInstStats(CPU *cpu)
              "Number of executed instructions"),
     ADD_STAT(numPoisonedInsts, statistics::units::Count::get(),
              "Number of poisoned instructions executed"),
+    ADD_STAT(numNonSpecRunaheadInsts, statistics::units::Count::get(),
+             "Number of non-speculative instructions encountered in runahead"),
     ADD_STAT(numLoadInsts, statistics::units::Count::get(),
              "Number of load instructions executed"),
     ADD_STAT(numSquashedInsts, statistics::units::Count::get(),
@@ -1231,6 +1233,17 @@ IEW::executeInsts()
 
         Fault fault = NoFault;
 
+        if (inst->isRunahead() && (inst->isNonSpeculative() || inst->isAtomic())) {
+            // Non-speculative instructions cannot execute in runahead
+            // Poison them and send to commit for retirement
+            DPRINTF(RunaheadIEW, "[sn:%llu] Non-speculative instruction encountered in runahead. "
+                                 "Skipping.\n",
+                                 inst->seqNum);
+
+            inst->setPoisoned();
+            ++iewStats.executedInstStats.numNonSpecRunaheadInsts;
+        }
+
         // Most poisoned-on-arrival instructions do not need to execute
         if (inst->isPoisoned() && !inst->isStore()) {
             DPRINTF(RunaheadIEW, "[sn:%llu] Instruction with PC %s was poisoned, %s.\n",
@@ -1484,13 +1497,13 @@ IEW::writebackInsts()
                 }
 
                 // Mark it as poisoned if the instruction was poisoned
-                if (inst->isPoisoned()) {
+                if (inst->isPoisoned() && destReg->classValue() != MiscRegClass) {
                     DPRINTF(RunaheadIEW,
                             "[sn:%llu] Poisoning destination register %i (%s) (flat:%i)\n",
                             inst->seqNum, destReg->index(),
                             destReg->className(), destReg->flatIndex());
                     cpu->regPoisoned(destReg, true);
-                } else {
+                } else if (destReg->classValue() != MiscRegClass) {
                     // And "cure" the register if the instruction was valid
                     cpu->regPoisoned(destReg, false);
                 }
