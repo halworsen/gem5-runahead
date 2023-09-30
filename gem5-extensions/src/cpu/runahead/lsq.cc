@@ -1205,6 +1205,10 @@ LSQ::LSQRequest::~LSQRequest()
 
     for (auto r: _packets)
         delete r;
+
+    for (auto p: _rCachePackets) {
+        delete p;
+    }
 };
 
 ContextID
@@ -1265,7 +1269,7 @@ LSQ::SingleDataRequest::recvTimingResp(PacketPtr pkt)
             assert(pkt == _rCachePackets.front());
             flags.set(Flag::Complete);
             _port.completeDataAccess(pkt);
-        } // maybe else: delete pkt? idk if the packet is GC'd or freed elsewhere
+        }
     } else {
         assert(pkt == _packets.front());
         flags.set(Flag::Complete);
@@ -1313,12 +1317,20 @@ LSQ::SplitDataRequest::recvTimingResp(PacketPtr pkt)
         }
         resp->senderState = this;
 
-        // Kind of a hack, but needed to make the request recognize the packet as an R-cache packet
+        // Hack: needed to make the request recognize the packet as an R-cache packet
         // This is because we're assembling a new packet instead of using the original ones
+        // The logic for determining if a packet is from R-cache is based on which packets are tracked by the req
         if (rCacheExpected())
             pushRCachePacket(resp);
 
         _port.completeDataAccess(resp);
+
+        // Remove the package again to prevent a double free...
+        // Alternatively, could have put "delete resp" under if (!rCacheExpected())
+        // That way the req deletes the packet when it is deleted
+        if (rCacheExpected())
+            removeRCachePacket(resp);
+
         delete resp;
     }
 

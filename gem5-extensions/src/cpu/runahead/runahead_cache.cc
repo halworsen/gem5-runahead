@@ -156,7 +156,8 @@ RunaheadCache::handlePacket(PacketPtr pkt)
             pkt->isRead() ? "read" : "write", pkt->getAddr());
     ++rCacheStats.packetsHandled;
 
-    PacketPtr respPkt = new Packet(*pkt);
+    // freed by the LSQ request
+    PacketPtr respPkt = new Packet(pkt, false, true);
     // maybe copy the data as well to ensure Dcache doesn't overwrite the reply later
     if (respPkt->isWrite()) {
         write(respPkt);

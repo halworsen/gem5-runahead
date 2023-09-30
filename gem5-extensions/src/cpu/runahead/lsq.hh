@@ -576,6 +576,17 @@ class LSQ
         bool isPoisoned() { return flags.isSet(Flag::Poisoned); };
 
         void pushRCachePacket(PacketPtr pkt) { _rCachePackets.push_back(pkt); };
+        void
+        removeRCachePacket(PacketPtr pkt)
+        {
+            for (auto i = _rCachePackets.begin(); i != _rCachePackets.end(); i++) {
+                PacketPtr rPkt = *i;
+                if (pkt == rPkt) {
+                    _rCachePackets.erase(i);
+                    return;
+                }
+            }
+        }
 
         bool
         isRCachePacket(PacketPtr pkt)

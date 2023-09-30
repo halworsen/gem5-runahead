@@ -371,7 +371,7 @@ class Commit
     bool tcSquash[MaxThreads];
 
     /** Records if a thread should exit runahead this cycle */
-    bool exitRunahead[MaxThreads];
+    bool exitRunahead[MaxThreads] = { false };
 
     /** 
      * Records whether or not the CPU was in runahead last cycle.
