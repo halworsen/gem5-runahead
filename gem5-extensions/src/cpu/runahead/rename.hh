@@ -550,9 +550,6 @@ class Rename
         statistics::Scalar tempSerializing;
         /** Number of instructions inserted into skid buffers. */
         statistics::Scalar skidInsts;
-
-        /** Amount of times rename stalled due to a full ROB with a long latency load at its head */
-        statistics::Scalar lllBlocks;
     } stats;
 };
 

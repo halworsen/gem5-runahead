@@ -472,6 +472,9 @@ public:
     /** The amount of instructions pseudoretired in the current runahead period */
     uint64_t instsPseudoretired;
 
+    /** The tick at which runahead was last entered */
+    Tick runaheadEnteredTick;
+
     /** The depth at which a blocking memory request is considered a long latency load */
     uint8_t lllDepthThreshold;
 
@@ -729,6 +732,12 @@ public:
 
         // Amount of times runahead was entered
         statistics::Scalar runaheadPeriods;
+        // Histogram of amount of cycles spent in runahead periods
+        statistics::Histogram runaheadCycles;
+        // Amount of times the CPU refused to enter into runahead
+        statistics::Scalar refusedRunaheadEntries;
+        // Histogram of amount of instructions pseudoretired by runahead execution
+        statistics::Histogram instsPseudoRetired;
 
         // Amount of times an integer register was marked as poisoned
         statistics::Scalar intRegPoisoned;

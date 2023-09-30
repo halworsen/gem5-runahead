@@ -110,8 +110,7 @@ LSQUnit::recvTimingResp(PacketPtr pkt)
             DPRINTF(RunaheadLSQ, "Request #%d hit at depth %d\n", idx+1, depth);
         }
 
-        if (inst->isLoad())
-            ++stats.runaheadLoadsReceived;
+        ++stats.runaheadPacketsReceived[pkt->isRead() ? 0 : 1];
     }
 
     // Check if the instruction that initiated the request caused runahead
@@ -150,6 +149,8 @@ LSQUnit::forgeResponse(const DynInstPtr &inst)
     // Issue a bogus 0 for the memory data
     DPRINTF(RunaheadLSQ, "Forging load response for load with [sn:%llu] PC %s\n",
             inst->seqNum, inst->pcState());
+    ++stats.loadResponsesForged;
+
     PacketPtr pkt = new Packet(*req->packet());
     // maybe not necessary?
     memset(inst->memData, 0, req->mainReq()->getSize());
@@ -361,6 +362,11 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
                "being blocked"),
       ADD_STAT(loadToUse, "Distribution of cycle latency between the "
                 "first time a load is issued and its completion"),
+      ADD_STAT(loadResponsesForged, statistics::units::Count::get(),
+               "Number of load responses that were forged "
+               "(due to being LLLs in runahead/causing runahead)"),
+      ADD_STAT(runaheadPacketsReceived, statistics::units::Count::get(),
+               "Number of timing responses received tied to runahead loads"),
       ADD_STAT(runaheadLLLsCompleted, statistics::units::Count::get(),
                "Number of load responses that were ignored because the load "
                "was a (valid) LLL in runahead"),
@@ -376,6 +382,12 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
         .init(0, 299, 10)
         .flags(statistics::nozero);
 
+    loadResponsesForged.prereq(loadResponsesForged);
+    runaheadPacketsReceived
+        .init(2)
+        .subname(0, "read")
+        .subname(1, "write")
+        .flags(statistics::total);
     runaheadLLLsCompleted.prereq(runaheadLLLsCompleted);
     staleRunaheadInsts.prereq(staleRunaheadInsts);
     forwardedPoisons.prereq(forwardedPoisons);

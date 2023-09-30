@@ -151,8 +151,6 @@ Rename::RenameStats::RenameStats(statistics::Group *parent)
                "count of temporary serializing insts renamed"),
       ADD_STAT(skidInsts, statistics::units::Count::get(),
                "count of insts added to the skid buffer"),
-      ADD_STAT(lllBlocks, statistics::units::Count::get(),
-               "Number of times rename has blocked due to full ROB with LLL at head")
 {
     squashCycles.prereq(squashCycles);
     idleCycles.prereq(idleCycles);
@@ -165,7 +163,6 @@ Rename::RenameStats::RenameStats(statistics::Group *parent)
     squashedInsts.prereq(squashedInsts);
 
     ROBFullEvents.prereq(ROBFullEvents);
-    lllBlocks.prereq(lllBlocks);
     IQFullEvents.prereq(IQFullEvents);
     LQFullEvents.prereq(LQFullEvents);
     SQFullEvents.prereq(SQFullEvents);

@@ -401,6 +401,12 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "number of misc regfile writes"),
       ADD_STAT(runaheadPeriods, statistics::units::Count::get(),
                "Amount of times runahead was entered"),
+      ADD_STAT(runaheadCycles, statistics::units::Count::get(),
+               "Amount of cycles spent in runahead mode"),
+      ADD_STAT(refusedRunaheadEntries, statistics::units::Count::get(),
+               "Amount of times the CPU refused to enter into runahead"),
+      ADD_STAT(instsPseudoRetired, statistics::units::Count::get(),
+               "Amount of instructions pseudoretired by runahead execution"),
       ADD_STAT(intRegPoisoned, statistics::units::Count::get(),
                "Amount of times an integer register was marked as poisoned"),
       ADD_STAT(intRegCured, statistics::units::Count::get(),
@@ -502,7 +508,18 @@ CPU::CPUStats::CPUStats(CPU *cpu)
     
     runaheadPeriods
         .prereq(runaheadPeriods);
-    
+
+    runaheadCycles
+        .init(12)
+        .flags(statistics::total);
+
+    refusedRunaheadEntries
+        .prereq(refusedRunaheadEntries);
+
+    instsPseudoRetired
+        .init(12)
+        .flags(statistics::total);
+
     intRegPoisoned
         .prereq(intRegPoisoned);
     
@@ -1598,6 +1615,7 @@ CPU::canEnterRunahead(ThreadID tid)
     // If so, we must wait for architectural state to settle or runahead may compromise correctness
     if (iew.hasStoresToWB(tid)) {
         DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, IEW has outstanding stores.\n", tid);
+        cpuStats.refusedRunaheadEntries++;
         return false;
     }
 
@@ -1652,6 +1670,7 @@ CPU::enterRunahead(ThreadID tid)
     handleRunaheadLLL(robHead);
 
     instsPseudoretired = 0;
+    runaheadEnteredTick = curTick();
     cpuStats.runaheadPeriods++;
 }
 
@@ -1666,8 +1685,12 @@ CPU::runaheadLLLReturn(ThreadID tid)
 void
 CPU::exitRunahead(ThreadID tid)
 {
-    DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead. Instructions pseudoretired: %i\n",
-                         tid, instsPseudoretired);
+    Tick timeInRunahead = ticksToCycles(curTick() - runaheadEnteredTick);
+    DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead after %llu cycles. Instructions pseudoretired: %i\n",
+                         tid, timeInRunahead, instsPseudoretired);
+    
+    cpuStats.runaheadCycles.sample(timeInRunahead);
+    cpuStats.instsPseudoRetired.sample(instsPseudoretired);
 
     // Resume normal mode
     DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to normal.\n", tid);

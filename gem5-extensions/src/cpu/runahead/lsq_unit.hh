@@ -545,8 +545,11 @@ class LSQUnit
          * is issued and its completion */
         statistics::Distribution loadToUse;
 
+        /** Number of load responses that were forged (due to being LLLs in runahead/causing runahead) */
+        statistics::Scalar loadResponsesForged;
+
         /** Number of timing responses received tied to runahead loads */
-        statistics::Scalar runaheadLoadsReceived;
+        statistics::Vector runaheadPacketsReceived;
 
         /** Number of load responses that were ignored because
          * the load was a (valid) LLL in runahead. I.e. how many LLLs were completed in runahead. */
