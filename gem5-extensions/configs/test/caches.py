@@ -6,9 +6,9 @@ class L1Cache(Cache):
     2-way associative L1 cache.
     '''
     assoc = 2
-    tag_latency = 2
-    data_latency = 2
-    response_latency = 2
+    tag_latency = 4
+    data_latency = 4
+    response_latency = 4
     mshrs = 4
     tgts_per_mshr = 20
 
@@ -60,12 +60,44 @@ class L2Cache(Cache):
 
     def connect(self, bus, side='mem') -> None:
         '''
-        The L2 cache sits between two memory buses so the side param is required.
+        The L2 cache may sit between two memory buses so the side param is required.
         '''
         if side not in ('cpu', 'mem'):
             raise ValueError(f'invalid connection side "{side}"')
 
         if side == 'cpu':
-            self.cpu_side = bus.mem_side_ports
+            port = bus.mem_side if isinstance(bus, Cache) else bus.mem_side_ports
+            self.cpu_side = port
         elif side == 'mem':
-            self.mem_side = bus.cpu_side_ports
+            port = bus.cpu_side if isinstance(bus, Cache) else bus.cpu_side_ports
+            self.mem_side = port
+
+
+class L3Cache(Cache):
+    '''
+    12-way associative shared L3 cache
+    '''
+    assoc = 12
+    tag_latency = 30
+    data_latency = 30
+    response_latency = 30
+    mshrs = 30
+    tgts_per_mshr = 10
+
+    def __init__(self, size) -> None:
+        super().__init__()
+        self.size = size
+
+    def connect(self, bus, side='mem') -> None:
+        '''
+        The L3 cache sits between two memory buses so the side param is required.
+        '''
+        if side not in ('cpu', 'mem'):
+            raise ValueError(f'invalid connection side "{side}"')
+
+        if side == 'cpu':
+            port = bus.mem_side if isinstance(bus, Cache) else bus.mem_side_ports
+            self.cpu_side = port
+        elif side == 'mem':
+            port = bus.cpu_side if isinstance(bus, Cache) else bus.cpu_side_ports
+            self.mem_side = port
