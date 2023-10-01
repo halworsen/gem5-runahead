@@ -482,6 +482,10 @@ LSQ::recvTimingResp(PacketPtr pkt)
         }
     }
 
+    // Update instruction memory responder depth for stats
+    for (RequestPtr req : request->_reqs)
+        request->instruction()->updateMemDepth(req->depth);
+
     // Update the LSQRequest state (this may delete the request)
     request->packetReplied(pkt);
 

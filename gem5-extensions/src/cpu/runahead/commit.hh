@@ -347,6 +347,9 @@ class Commit
     /** ROB interface. */
     ROB *rob;
 
+    /** The amount of instructions pseudoretired in the current runahead period */
+    uint64_t instsPseudoretired[MaxThreads];
+
   private:
     /** Pointer to RunaheadCPU. */
     CPU *cpu;
@@ -529,7 +532,7 @@ class Commit
         statistics::Scalar loadsAtROBHead;
         /** Amount of cycles with long-latency loads at the head of the ROB during commit */
         statistics::Scalar lllAtROBHead;
-        /** Total number of instructions committed during runahead */
+        /** Total number of instructions committed during runahead per thread */
         statistics::Vector instsPseudoretired;
         /** Total number of poisoned instructions retired by commit */
         statistics::Scalar commitPoisonedInsts;

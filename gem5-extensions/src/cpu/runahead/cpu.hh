@@ -396,6 +396,12 @@ private:
     /** Whether or not runahead is enabled */
     bool runaheadEnabled;
 
+    /** The in-flight threshold for runahead entry */
+    Cycles runaheadInFlightThreshold;
+
+    /** Allow entry to runahead if it would overlap periods? */
+    bool allowOverlappingRunahead;
+
     /** Tracks which threads are in runahead */
     bool runaheadStatus[MaxThreads];
 
@@ -423,8 +429,8 @@ public:
     /** The instruction that caused us to enter runahead mode */
     std::array<DynInstPtr, MaxThreads> runaheadCause;
 
-    /** Check if we can enter runahead right now */
-    bool canEnterRunahead(ThreadID tid);
+    /** Check if we can enter runahead right now, caused by the given inst */
+    bool canEnterRunahead(ThreadID tid, const DynInstPtr &inst);
 
     /** Enter runahead, starting from the instruction at the head of the ROB */
     void enterRunahead(ThreadID tid);
@@ -468,9 +474,6 @@ public:
 
     /** Mark/unmark a register as poisoned */
     void regPoisoned(PhysRegIdPtr reg, bool poisoned);
-
-    /** The amount of instructions pseudoretired in the current runahead period */
-    uint64_t instsPseudoretired;
 
     /** The tick at which runahead was last entered */
     Tick runaheadEnteredTick;
@@ -735,9 +738,13 @@ public:
         // Histogram of amount of cycles spent in runahead periods
         statistics::Histogram runaheadCycles;
         // Amount of times the CPU refused to enter into runahead
-        statistics::Scalar refusedRunaheadEntries;
+        statistics::Vector refusedRunaheadEntries;
         // Histogram of amount of instructions pseudoretired by runahead execution
-        statistics::Histogram instsPseudoRetired;
+        statistics::Histogram instsPseudoRetiredPerPeriod;
+        // Histogram of instructions fetched between runahead periods
+        statistics::Distribution instsBetweenRunahead;
+        // Histogram of cycles a load has been in-flight when it triggered runahead
+        statistics::Histogram triggerLLLinFlightCycles;
 
         // Amount of times an integer register was marked as poisoned
         statistics::Scalar intRegPoisoned;
@@ -763,6 +770,12 @@ public:
         statistics::Scalar miscRegPoisoned;
         // Amount of times a misc register's poison was reset
         statistics::Scalar miscRegCured;
+
+        enum {
+            StoresToWB,
+            ExpectedReturnSoon,
+            OverlappingPeriod
+        };
 
     } cpuStats;
 

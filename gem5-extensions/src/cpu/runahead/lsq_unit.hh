@@ -563,6 +563,9 @@ class LSQUnit
 
         /** Number of runahead stores forwarded to (runahead) loads */
         statistics::Scalar forwardedRunaheadLoads;
+
+        /** Histogram of load instructions' memory responder depths on completion (0 for L1, 1 for L2, etc.) */
+        statistics::Histogram loadDepths;
     } stats;
 
   public:

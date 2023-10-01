@@ -372,6 +372,8 @@ class DynInst : public ExecContext, public RefCounted
      */
     LSQ::LSQRequest *savedRequest;
 
+    int _maxMemDepth = 0;
+
     /////////////////////// Checker //////////////////////
     // Need a copy of main request pointer to verify on writes.
     RequestPtr reqToVerify;
@@ -984,6 +986,10 @@ class DynInst : public ExecContext, public RefCounted
     bool hasRequest() const { return instFlags[ReqMade]; }
     /** Assert this instruction has generated a memory request. */
     void setRequest() { instFlags[ReqMade] = true; }
+
+    /** Update the maximum depth at which this inst's request was responded to */
+    void updateMemDepth(int depth) { _maxMemDepth = (depth > _maxMemDepth) ? depth : _maxMemDepth; }
+    int getMemDepth() { return _maxMemDepth; }
 
     /** Returns iterator to this instruction in the list of all insts. */
     ListIt &getInstListIt() { return instListIt; }

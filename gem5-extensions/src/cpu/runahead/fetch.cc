@@ -206,10 +206,11 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
     ADD_STAT(branchRate, statistics::units::Ratio::get(),
              "Number of branch fetches per cycle",
              branches / cpu->baseStats.numCycles),
-    ADD_STAT(rate, statistics::units::Rate<
-                    statistics::units::Count, statistics::units::Cycle>::get(),
+    ADD_STAT(rate, statistics::units::Rate<statistics::units::Count, statistics::units::Cycle>::get(),
              "Number of inst fetches per cycle",
-             insts / cpu->baseStats.numCycles)
+             insts / cpu->baseStats.numCycles),
+    ADD_STAT(runaheadInsts, statistics::units::Count::get(),
+             "Number of instructions fetched in runahead")
 {
         icacheStallCycles
             .prereq(icacheStallCycles);
@@ -258,6 +259,8 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
             .flags(statistics::total);
         rate
             .flags(statistics::total);
+        runaheadInsts
+            .prereq(runaheadInsts);
 }
 void
 Fetch::setTimeBuffer(TimeBuffer<TimeStruct> *time_buffer)
@@ -1254,6 +1257,10 @@ Fetch::fetch(bool &status_change)
 
                     // Increment stat of fetched instructions.
                     ++fetchStats.insts;
+                    if (cpu->inRunahead(tid))
+                        ++fetchStats.runaheadInsts;
+                    else
+                        ++instsBetweenRunahead[tid];
 
                     if (staticInst->isMacroop()) {
                         curMacroop = staticInst;

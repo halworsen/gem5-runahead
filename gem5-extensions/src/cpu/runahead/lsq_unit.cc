@@ -376,7 +376,9 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
       ADD_STAT(forwardedPoisons, statistics::units::Count::get(),
                "Number of poisoned stores that were forwarded to loads"),
       ADD_STAT(forwardedRunaheadLoads, statistics::units::Count::get(),
-               "Number of runahead stores that were forwarded to (runahead) loads")
+               "Number of runahead stores that were forwarded to (runahead) loads"),
+      ADD_STAT(loadDepths, statistics::units::Count::get(),
+               "Histogram of load instructions' memory responder depths on completion")
 {
     loadToUse
         .init(0, 299, 10)
@@ -392,6 +394,10 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
     staleRunaheadInsts.prereq(staleRunaheadInsts);
     forwardedPoisons.prereq(forwardedPoisons);
     forwardedRunaheadLoads.prereq(forwardedRunaheadLoads);
+
+    loadDepths
+        .init(4)
+        .flags(statistics::total);
 }
 
 void
@@ -851,6 +857,7 @@ LSQUnit::commitLoad()
             && inst->lastWakeDependents != -1) {
         stats.loadToUse.sample(cpu->ticksToCycles(
                     inst->lastWakeDependents - inst->firstIssue));
+        stats.loadDepths.sample(inst->getMemDepth());
     }
 
     loadQueue.front().clear();

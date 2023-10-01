@@ -80,6 +80,8 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
       threadExitEvent([this]{ exitThreads(); }, "RunaheadCPU exit threads",
                 false, Event::CPU_Exit_Pri),
       runaheadEnabled(params.enableRunahead),
+      runaheadInFlightThreshold(params.runaheadInFlightThreshold),
+      allowOverlappingRunahead(params.allowOverlappingRunahead),
       lllDepthThreshold(params.lllDepthThreshold),
 #ifndef NDEBUG
       instcount(0),
@@ -405,8 +407,12 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "Amount of cycles spent in runahead mode"),
       ADD_STAT(refusedRunaheadEntries, statistics::units::Count::get(),
                "Amount of times the CPU refused to enter into runahead"),
-      ADD_STAT(instsPseudoRetired, statistics::units::Count::get(),
-               "Amount of instructions pseudoretired by runahead execution"),
+      ADD_STAT(instsPseudoRetiredPerPeriod, statistics::units::Count::get(),
+               "Amount of instructions pseudoretired by runahead execution periods"),
+      ADD_STAT(instsBetweenRunahead, statistics::units::Count::get(),
+               "Amount of instructions fetched between runahead periods"),
+      ADD_STAT(triggerLLLinFlightCycles, statistics::units::Cycle::get(),
+               "Amount of cycles a load has been in-flight when it triggered runahead"),
       ADD_STAT(intRegPoisoned, statistics::units::Count::get(),
                "Amount of times an integer register was marked as poisoned"),
       ADD_STAT(intRegCured, statistics::units::Count::get(),
@@ -514,10 +520,19 @@ CPU::CPUStats::CPUStats(CPU *cpu)
         .flags(statistics::total);
 
     refusedRunaheadEntries
-        .prereq(refusedRunaheadEntries);
+        .init(OverlappingPeriod + 1)
+        .flags(statistics::total);
 
-    instsPseudoRetired
+    instsPseudoRetiredPerPeriod
         .init(12)
+        .flags(statistics::total);
+
+    instsBetweenRunahead
+        .init(0, 2000, 100)
+        .flags(statistics::total);
+
+    triggerLLLinFlightCycles
+        .init(8)
         .flags(statistics::total);
 
     intRegPoisoned
@@ -1601,7 +1616,7 @@ CPU::dumpArchRegs(ThreadID tid)
 }
 
 bool
-CPU::canEnterRunahead(ThreadID tid)
+CPU::canEnterRunahead(ThreadID tid, const DynInstPtr &inst)
 {
     if (!runaheadEnabled)
         return false;
@@ -1615,12 +1630,26 @@ CPU::canEnterRunahead(ThreadID tid)
     // If so, we must wait for architectural state to settle or runahead may compromise correctness
     if (iew.hasStoresToWB(tid)) {
         DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, IEW has outstanding stores.\n", tid);
-        cpuStats.refusedRunaheadEntries++;
+        cpuStats.refusedRunaheadEntries[cpuStats.StoresToWB]++;
         return false;
     }
 
-    // Maybe also check for committed insts that are not completed?
-    // Dunno if that applies to more than just stores
+    // Check if this period is potentially too short
+    Cycles inFlightCycles = ticksToCycles(curTick() - inst->firstIssue);
+    assert(inFlightCycles > Cycles(0));
+    if (inFlightCycles > runaheadInFlightThreshold) {
+        DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, load has been in-flight too long.\n", tid);
+        cpuStats.refusedRunaheadEntries[cpuStats.ExpectedReturnSoon]++;
+        return false;
+    }
+
+    // Check that this period won't overlap with a previous one
+    // I.e. we must have fetched enough insts to catch up with the work runahead did
+    if (fetch.instsBetweenRunahead[tid] < commit.instsPseudoretired[tid]) {
+        DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, period would overlap.\n", tid);
+        cpuStats.refusedRunaheadEntries[cpuStats.OverlappingPeriod]++;
+        return false;
+    }
 
     return true;
 }
@@ -1628,14 +1657,16 @@ CPU::canEnterRunahead(ThreadID tid)
 void
 CPU::enterRunahead(ThreadID tid)
 {
-    if (!canEnterRunahead(tid))
-        return;
-
     DynInstPtr robHead = rob.readHeadInst(tid);
-    assert(robHead->isLoad());
+    assert(robHead->isLoad() && !robHead->isSquashed() && !robHead->isRunahead());
+
+    if (!canEnterRunahead(tid, robHead))
+        return;
 
     DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead, caused by sn:%llu (PC %s).\n",
                          tid, robHead->seqNum, robHead->pcState());
+    Cycles inFlightCycles = ticksToCycles(curTick() - robHead->firstIssue);
+    cpuStats.triggerLLLinFlightCycles.sample(inFlightCycles);
 
     // DEBUG - dump before runahead starts
     //dumpArchRegs(tid);
@@ -1669,7 +1700,7 @@ CPU::enterRunahead(ThreadID tid)
     // Poison the LLL and "execute" it so it can drain out.
     handleRunaheadLLL(robHead);
 
-    instsPseudoretired = 0;
+    commit.instsPseudoretired[tid] = 0;
     runaheadEnteredTick = curTick();
     cpuStats.runaheadPeriods++;
 }
@@ -1687,14 +1718,19 @@ CPU::exitRunahead(ThreadID tid)
 {
     Tick timeInRunahead = ticksToCycles(curTick() - runaheadEnteredTick);
     DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead after %llu cycles. Instructions pseudoretired: %i\n",
-                         tid, timeInRunahead, instsPseudoretired);
-    
+                         tid, timeInRunahead, commit.instsPseudoretired[tid]);
+
     cpuStats.runaheadCycles.sample(timeInRunahead);
-    cpuStats.instsPseudoRetired.sample(instsPseudoretired);
+    cpuStats.instsPseudoRetiredPerPeriod.sample(commit.instsPseudoretired[tid]);
+    cpuStats.instsBetweenRunahead.sample(fetch.instsBetweenRunahead[tid]);
 
     // Resume normal mode
     DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to normal.\n", tid);
     inRunahead(tid, false);
+
+    // Impossible to have re-entered runahead without fetching new insts
+    assert(fetch.instsBetweenRunahead[tid] > 0);
+    fetch.instsBetweenRunahead[tid] = 0;
 }
 
 void

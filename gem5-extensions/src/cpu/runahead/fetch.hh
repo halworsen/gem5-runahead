@@ -360,6 +360,9 @@ class Fetch
 
     RequestPort &getInstPort() { return icachePort; }
 
+    /** Instructions fetched since last runahead exit and before earliest runahead entry */
+    int instsBetweenRunahead[MaxThreads] = { 0 };
+
   private:
     DynInstPtr buildInst(ThreadID tid, StaticInstPtr staticInst,
             StaticInstPtr curMacroop, const PCStateBase &this_pc,
@@ -586,6 +589,9 @@ class Fetch
         statistics::Formula branchRate;
         /** Number of instruction fetched per cycle. */
         statistics::Formula rate;
+
+        /** Number of runahead insts fetched */
+        statistics::Scalar runaheadInsts;
     } fetchStats;
 };
 

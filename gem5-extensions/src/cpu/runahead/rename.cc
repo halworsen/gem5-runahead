@@ -150,7 +150,7 @@ Rename::RenameStats::RenameStats(statistics::Group *parent)
       ADD_STAT(tempSerializing, statistics::units::Count::get(),
                "count of temporary serializing insts renamed"),
       ADD_STAT(skidInsts, statistics::units::Count::get(),
-               "count of insts added to the skid buffer"),
+               "count of insts added to the skid buffer")
 {
     squashCycles.prereq(squashCycles);
     idleCycles.prereq(idleCycles);

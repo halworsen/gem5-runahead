@@ -179,14 +179,14 @@ class BaseRunaheadCPU(BaseCPU):
         ' and instructions that generate memory addresses'
     )
 
-    # Can be set to a massive number to practically disable
+    # Set to 0 to disable
     runaheadInFlightThreshold = Param.Cycles(
-        200,
+        120,
         'The amount of cycles a memory access has been in-flight for after which it cannot'
         ' trigger runahead due to the assumption that the load will complete soon.'
     )
 
-    runaheadCanOverlap = Param.Bool(
+    allowOverlappingRunahead = Param.Bool(
         False,
         'Should the CPU allow overlapping runahead periods'
     )

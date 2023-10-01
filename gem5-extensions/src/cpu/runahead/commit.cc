@@ -1107,6 +1107,7 @@ Commit::commitInsts()
                     "[sn:%llu] (PC %s). Associated requests:\n",
                     tid, head_inst->seqNum, head_inst->pcState());
 
+            // Can't use the stored depth on the inst because it is only updated when pkts respond
             for (int idx = 0; idx < lsqRequest->_reqs.size(); idx++) {
                 RequestPtr request = lsqRequest->req(idx);
                 int depth = request->getAccessDepth();
@@ -1130,6 +1131,8 @@ Commit::commitInsts()
                         // Tell the CPU to deal with it. This is kinda ugly, LSQ should handle these
                         cpu->handleRunaheadLLL(head_inst);
                     }
+
+                    break;
                 }
             }
 
@@ -1557,7 +1560,7 @@ Commit::updateComInstStats(const DynInstPtr &inst)
         stats.instsCommitted[tid]++;
         if (inst->isRunahead()) {
             stats.instsPseudoretired[tid]++;
-            cpu->instsPseudoretired++;
+            instsPseudoretired[tid]++;
 
             if (inst->isPoisoned())
                 ++stats.commitPoisonedInsts;
