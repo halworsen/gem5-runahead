@@ -180,7 +180,7 @@ def main(opts: argparse.Namespace) -> None:
             data = parse_line(line, opts.convert_percentage, n + 1)
             # Merge the section stats with the data from the line
             _data = data
-            _section_data = cur_section
+            _section_data = cur_section['stats']
             key = list(_data.keys())[0]
             while len(_data.keys()) == 1:
                 if key in _section_data:

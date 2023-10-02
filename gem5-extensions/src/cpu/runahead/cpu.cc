@@ -403,7 +403,7 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "number of misc regfile writes"),
       ADD_STAT(runaheadPeriods, statistics::units::Count::get(),
                "Amount of times runahead was entered"),
-      ADD_STAT(runaheadCycles, statistics::units::Count::get(),
+      ADD_STAT(runaheadCycles, statistics::units::Cycle::get(),
                "Amount of cycles spent in runahead mode"),
       ADD_STAT(refusedRunaheadEntries, statistics::units::Count::get(),
                "Amount of times the CPU refused to enter into runahead"),
@@ -516,7 +516,7 @@ CPU::CPUStats::CPUStats(CPU *cpu)
         .prereq(runaheadPeriods);
 
     runaheadCycles
-        .init(12)
+        .init(0, 1000, 50)
         .flags(statistics::total);
 
     refusedRunaheadEntries
@@ -555,7 +555,7 @@ CPU::CPUStats::CPUStats(CPU *cpu)
 
     vecPredRegPoisoned
         .prereq(vecPredRegPoisoned);
-    
+
     vecPredRegCured
         .prereq(vecPredRegCured);
 

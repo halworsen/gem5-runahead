@@ -735,8 +735,8 @@ public:
 
         // Amount of times runahead was entered
         statistics::Scalar runaheadPeriods;
-        // Histogram of amount of cycles spent in runahead periods
-        statistics::Histogram runaheadCycles;
+        // Distribution of amount of cycles spent in runahead periods
+        statistics::Distribution runaheadCycles;
         // Amount of times the CPU refused to enter into runahead
         statistics::Vector refusedRunaheadEntries;
         // Histogram of amount of instructions pseudoretired by runahead execution
