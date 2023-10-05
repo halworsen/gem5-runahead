@@ -544,6 +544,9 @@ class LSQUnit
         /** Distribution of cycle latency between the first time a load
          * is issued and its completion */
         statistics::Distribution loadToUse;
+        /** Distribution of cycle latency between the first time a load
+         * is issued and its completion. Runahead loads not included */
+        statistics::Distribution realLoadToUse;
 
         /** Number of load responses that were forged (due to being LLLs in runahead/causing runahead) */
         statistics::Scalar loadResponsesForged;

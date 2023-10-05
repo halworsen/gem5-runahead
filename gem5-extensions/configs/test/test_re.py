@@ -18,13 +18,13 @@ def setup_system(args) -> System:
 
     #system.cpu = X86O3CPU()
     system.cpu = X86RunaheadCPU()
-    system.cpu.enableRunahead = True
+    system.cpu.enableRunahead = args.runahead
     system.membus = SystemXBar()
 
-    system.cpu.icache = L1ICache('32kB')
-    system.cpu.dcache = L1DCache('32kB')
+    system.cpu.icache = L1ICache('16kB') # 32kb
+    system.cpu.dcache = L1DCache('16kB') # 32kb
     system.l2bus = L2XBar()
-    system.l2cache = L2Cache('256kB')
+    system.l2cache = L2Cache('128kB') # 256kb
 
     # connect L1 cache to the cpu-side ports
     system.cpu.icache.connect(system.cpu)
@@ -81,6 +81,8 @@ parser.add_argument('--size', type=int, default=32, help='Matrix size')
 parser.add_argument('--random', type=int, default=32, help='Shuffle multiplication')
 parser.add_argument('--l3', default=True, action='store_true')
 parser.add_argument('--no-l3', dest='l3', action='store_false', help='Use a two-level cache hierarchy')
+parser.add_argument('--no-runahead', dest='runahead', action='store_false', help='Disable runahead execution')
+parser.set_defaults(runahead=True)
 
 args = parser.parse_args()
 

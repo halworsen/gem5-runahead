@@ -362,6 +362,8 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
                "being blocked"),
       ADD_STAT(loadToUse, "Distribution of cycle latency between the "
                 "first time a load is issued and its completion"),
+      ADD_STAT(realLoadToUse, "Distribution of cycle latency between the "
+               "first time a load is issued and its completion. Doesn't include runahead loads"),
       ADD_STAT(loadResponsesForged, statistics::units::Count::get(),
                "Number of load responses that were forged "
                "(due to being LLLs in runahead/causing runahead)"),
@@ -381,6 +383,9 @@ LSQUnit::LSQUnitStats::LSQUnitStats(statistics::Group *parent)
                "Histogram of load instructions' memory responder depths on completion")
 {
     loadToUse
+        .init(0, 299, 10)
+        .flags(statistics::nozero);
+    realLoadToUse
         .init(0, 299, 10)
         .flags(statistics::nozero);
 
@@ -855,8 +860,10 @@ LSQUnit::commitLoad()
     if (!inst->isInstPrefetch() && !inst->isDataPrefetch()
             && inst->firstIssue != -1
             && inst->lastWakeDependents != -1) {
-        stats.loadToUse.sample(cpu->ticksToCycles(
-                    inst->lastWakeDependents - inst->firstIssue));
+        Cycles loadToUse = cpu->ticksToCycles(inst->lastWakeDependents - inst->firstIssue);
+        stats.loadToUse.sample(loadToUse);
+        if (!inst->isRunahead())
+            stats.realLoadToUse.sample(loadToUse);
         stats.loadDepths.sample(inst->getMemDepth());
     }
 

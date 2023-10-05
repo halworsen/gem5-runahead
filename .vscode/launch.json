@@ -5,11 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug gem5",
+            "name": "Debug gem5 - Test",
             "type": "cppdbg",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            
 
             "program": "${workspaceFolder}/gem5/build/X86/gem5.debug",
             // dynamic input will launch the job prior to launch since inputs are executed before
@@ -18,7 +17,28 @@
 
             "MIMode": "gdb",
             "miDebuggerPath": "${userHome}/bin/gdb",
-            "miDebuggerServerAddress": "${input:gdbTarget}",
+            "miDebuggerServerAddress": "${input:gdbTargetTest}",
+
+            "postRemoteConnectCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+        },
+        {
+            "name": "Debug gem5 - SPEC2017",
+            "type": "cppdbg",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+
+            "program": "${workspaceFolder}/gem5/build/X86/gem5.debug",
+            "postDebugTask": "Kill SLURM jobs",
+
+            "MIMode": "gdb",
+            "miDebuggerPath": "${userHome}/bin/gdb",
+            "miDebuggerServerAddress": "${input:gdbTargetSPEC}",
 
             "postRemoteConnectCommands": [
                 {
@@ -36,15 +56,31 @@
             "description": "Name of the worker node running the gdbserver"
         },
         {
-            "id": "gdbTarget",
+            "id": "gdbTargetTest",
             "type": "command",
             "command": "shellCommand.execute",
             "args": {
-                "command": "./scripts/launch_gdb.sh ./jobs/gem5_gdb.sh",
+                "command": "./scripts/launch_gdb.sh \"./jobs/gem5_gdb.sh -w test\"",
                 "fieldSeparator": "|",
                 "useFirstResult": true,
                 "cwd": "${workspaceFolder}",
             }
+        },
+        {
+            "id": "gdbTargetSPEC",
+            "type": "command",
+            "command": "shellCommand.execute",
+            "args": {
+                "command": "./scripts/launch_gdb.sh \"./jobs/gem5_gdb.sh -w spec2017\"",
+                "fieldSeparator": "|",
+                "useFirstResult": true,
+                "cwd": "${workspaceFolder}",
+            }
+        },
+        {
+            "id": "debugStartTick",
+            "type": "promptString",
+            "description": "What tick to begin debug printing at"
         }
     ]
 }

@@ -7,7 +7,7 @@
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=3000
+#SBATCH --mem=2000
 #SBATCH --time=7-06:00:00
 #SBATCH --signal=SIGINT
 
@@ -29,8 +29,6 @@ if ! [[ -d "$LOG_DIR" ]]; then
 fi
 
 M5_OUT_DIR="$LOG_DIR/m5out"
-CHECKPOINT_DIR="$LOG_DIR/checkpoints"
-SIMPOINT_DIR="$LOG_DIR/simpoints"
 SIMOUT_FILE="$LOG_DIR/${SLURM_JOB_NAME}_simout.log"
 SLURM_LOG_FILE="$LOG_DIR/${SLURM_JOB_NAME}_slurm.log"
 

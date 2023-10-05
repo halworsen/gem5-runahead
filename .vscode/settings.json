@@ -72,5 +72,16 @@
         "cfenv": "cpp",
         "typeindex": "cpp",
         "variant": "cpp"
-    }
+    },
+    "python.analysis.include": [
+        "/cluster/home/markuswh/gem5-runahead/gem5/src/python",
+        "/cluster/home/markuswh/gem5-runahead/gem5/build/X86/python/m5",
+        "/cluster/home/markuswh/gem5-runahead/gem5/build/X86/python/gem5",
+        "/cluster/home/markuswh/gem5-runahead/gem5/build/X86/arch/x86"
+    ],
+    "python.analysis.extraPaths": [
+        "/cluster/home/markuswh/gem5-runahead/gem5/src/python",
+        "/cluster/home/markuswh/gem5-runahead/gem5/build/X86/python/m5",
+        "/cluster/home/markuswh/gem5-runahead/gem5/build/X86/python/gem5"
+    ]
 }

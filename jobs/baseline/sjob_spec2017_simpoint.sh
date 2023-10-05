@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=3000
 #SBATCH --time=7-06:00:00
-#SBATCH --signal=SIGINT
+#SBATCH --signal=B:SIGINT@120
 
 SPEC2017_DIR=/cluster/home/markuswh/gem5-runahead/spec2017
 RUNSCRIPT_DIR="$SPEC2017_DIR/scripts"
@@ -59,8 +59,8 @@ FSPARAMS=(
     "--max-insts=2000000000" # max 2 billion instructions
     "--clock=3.2GHz"
 
-    # Runahead options
-    "--no-runahead"
+    # 500mil insts
+    "--simpoint-interval=500000000"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"
@@ -68,21 +68,6 @@ FSPARAMS=(
     "--l2-size=256kB" "--l2-assoc=8"
     "--l3-size=6MB" "--l3-assoc=12"
     "--mem-size=2GB"
-
-    # Pipeline stage widths
-    "--fetch-width=4" "--decode-width=4" "--rename-width=4"
-    "--issue-width=4" "--writeback-width=8" "--commit-width=8"
-
-    # Issue/load/store queue sizes
-    "--iq-size=97" "--lq-size=64" "--sq-size=60"
-
-    # Physical registers
-    "--int-regs=180" "--fp-regs=180" "--vec-regs=96"
-
-    # Functional units
-    "--int-alus=3" "--int-mds=1"
-    "--fp-alus=1" "--fp-mds=1"
-    "--mem-ports=2"
 )
 
 PARAMS="${FSPARAMS[@]}"

@@ -1,5 +1,6 @@
 import argparse
 import os
+from datetime import datetime
 
 import m5
 from m5.objects import Root
@@ -24,8 +25,10 @@ parser = argparse.ArgumentParser(
 add_parser_args(parser)
 add_core_args(parser)
 add_memory_args(parser)
+
 args = parser.parse_args()
 
+print('Configuring system...')
 processor = setup_cores(args)
 board = X86Board(
     clk_freq=args.clock,
@@ -44,7 +47,8 @@ print(f'Using disk image at: {args.image}')
 print(f'Using readfile at: {args.script}')
 print('Readfile contents:')
 with open(args.script, 'r') as f:
-    print(f.read())
+    for i, line in enumerate(f.readlines()):
+        print(f'\t{i+1} | {line.strip()}')
 
 board.set_kernel_disk_workload(
     kernel=CustomResource(args.kernel),
@@ -58,12 +62,12 @@ board.set_kernel_disk_workload(
 # Apparently we need this for long running processes.
 m5.disableAllListeners()
 
-root = Root(full_system = True, system = board)
+root = Root(full_system=True, system=board)
 
 m5.instantiate()
 m5.stats.reset()
 
-print('Beginning simulation')
+print(f'Beginning simulation @ {datetime.now()}')
 print('Performing boot...')
 
 assert(root.system.readfile == args.script)
@@ -72,17 +76,18 @@ exit_event = m5.simulate()
 tick = m5.curTick()
 cause = exit_event.getCause()
 
-# Boot completed successfully, dump stats
+# Boot completed successfully, dump stats and switch cores
 if cause == 'm5_exit instruction encountered':
-    print(f'Boot completed @ t{tick}')
+    print(f'Boot completed @ {datetime.now()}')
+    print(f'Sim tick: t{tick}')
     print('Dumping and resetting simulation statistics...')
 
     m5.stats.dump()
     m5.stats.reset()
 
-    # Set the max instruction count so that we go for that amount in the actual benchmark
-    core = board.get_processor().get_cores()[0].core
-    core.max_insts_any_thread = core.totalInsts() + args.max_insts
+    # Switch to the detailed core (unless doing simpoint profiling)
+    if args.simpoint_interval == 0:
+        processor.switch()
 # Something went wrong
 else:
     print(f'Unexpected exit occured @ t{tick}')
@@ -95,8 +100,8 @@ exit_event = m5.simulate()
 tick = m5.curTick()
 cause = exit_event.getCause()
 
-print('Finished simulation')
+print(f'Finished simulation @ {datetime.now()}')
 print(f'Exit cause: {cause}')
 
-print('Dumping m5 statistics')
+print('Dumping statistics')
 m5.stats.dump()

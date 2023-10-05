@@ -3,6 +3,8 @@ __pycache__/
 
 # gem5 simulation output (stats, configs, etc.)
 m5out/
+# debug output
+debug/
 
 # relevant papers
 papers/*.pdf

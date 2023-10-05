@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-test"
+#SBATCH --job-name="gem5-test-ref"
 #SBATCH --account=share-ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null                       # output is manually redirected
@@ -44,5 +44,5 @@ echo "time: $(date)"
 echo "--- start job ---"
 
 ./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
-    $TEST_SCRIPT --size=$SIZE --random=$RANDOM --no-l3 \
+    $TEST_SCRIPT --size=$SIZE --random=$RANDOM --no-l3 --no-runahead \
     > $SIMOUT_FILE

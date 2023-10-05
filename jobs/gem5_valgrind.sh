@@ -1,12 +1,12 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-test"
+#SBATCH --job-name="gem5-valgrind"
 #SBATCH --account=share-ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null                       # output is manually redirected
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1                                # 1 compute node
-#SBATCH --cpus-per-task=4                        # 4 cores
-#SBATCH --mem=2000
+#SBATCH --cpus-per-task=2                        # 2 cores
+#SBATCH --mem=4000
 #SBATCH --time=06:00:00
 #SBATCH --signal=SIGINT                          # exit with SIGINT to let gem5 save stats 
 
@@ -31,18 +31,19 @@ module --quiet purge
 module restore gem5
 module list
 
-cd $HOME/gem5-runahead
+cd $RUNAHEAD_DIR
 source venv/bin/activate
 echo "--- python packages ---"
 pip freeze
 
 SIZE=$1
-RANDOM=1
 echo
 echo "job: test run of gem5 (SE mode) - $SIZE x $SIZE matrix multiplication"
 echo "time: $(date)"
 echo "--- start job ---"
 
-./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
-    $TEST_SCRIPT --size=$SIZE --random=$RANDOM --no-l3 \
+valgrind --leak-check=yes --suppressions=./gem5/util/valgrind-suppressions \
+    ./gem5/build/X86/gem5.opt \
+    --outdir $M5_OUT_DIR \
+    $TEST_SCRIPT --size=$SIZE --random=1 \
     > $SIMOUT_FILE

@@ -25,6 +25,7 @@ def add_memory_args(parser):
     cache_group.add_argument('--l3-assoc', default=12, help='Associativity of the L3 cache')
 
 def setup_cache(args):
+    print('Configuring cache hierarchy...')
     caches = ThreeLevelCacheHierarchy(
         l1i_size=args.l1i_size,
         l1i_assoc=args.l1i_assoc,
@@ -40,5 +41,6 @@ def setup_cache(args):
 
 
 def setup_memory(args) -> tuple:
+    print('Configuring DRAM...')
     memory = DualChannelDDR3_1600(size=args.mem_size)
     return memory

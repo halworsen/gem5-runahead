@@ -29,11 +29,23 @@
             ]
         },
         {
-            "label": "Run job - gem5-gdb",
+            "label": "Run job - gem5-gdb (matrix)",
             "type": "shell",
             "command": "${workspaceFolder}/scripts/runjob.sh",
             "args": [
-                "${workspaceFolder}/jobs/gem5_gdb.sh"
+                "${workspaceFolder}/jobs/gem5_gdb.sh",
+                "-w", "test"
+            ],
+            "group": "test",
+            "isBackground": false
+        },
+        {
+            "label": "Run job - gem5-gdb (spec2017)",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/runjob.sh",
+            "args": [
+                "${workspaceFolder}/jobs/gem5_gdb.sh",
+                "-w", "spec2017"
             ],
             "group": "test",
             "isBackground": false

@@ -1,12 +1,19 @@
+from typing import Any, Union
 from gem5.isas import ISA
-from gem5.components.processors.cpu_types import CPUTypes
-from gem5.components.processors.simple_core import SimpleCore
+from gem5.components.processors.cpu_types import CPUTypes, get_cpu_type_from_str
+from gem5.components.processors.simple_switchable_processor import SimpleSwitchableProcessor
 from gem5.components.processors.simple_processor import SimpleProcessor
 from m5.objects.FUPool import DefaultFUPool
 from m5.objects.BranchPredictor import TAGE_SC_L_8KB
+from gem5.components.processors.simple_core import SimpleCore
+from m5.objects import SimObject
+from m5.objects.SimPoint import SimPoint
 
 def add_core_args(parser):
-    cpu_group = parser.add_argument_group(title='O3 CPU Parameters')
+    cpu_group = parser.add_argument_group(title='CPU Parameters')
+
+    cpu_group.add_argument('--no-runahead', action='store_false', dest='enable_runahead')
+    cpu_group.set_defaults(enable_runahead=True)
 
     cpu_group.add_argument('--rob-size', default=224, type=int, help='The amount of ROB entries')
 
@@ -31,41 +38,75 @@ def add_core_args(parser):
     cpu_group.add_argument('--fp-mds', default=1, type=int, help='Floating point multiply/divide FUs')
     cpu_group.add_argument('--mem-ports', default=2, type=int, help='Memory port FUs')
 
+def setup_simpoint_profiling_processor(args) -> SimpleProcessor:
+    print('Creating atomic processor for simpoint BBV analysis')
+    processor = SimpleProcessor(cpu_type=CPUTypes.ATOMIC, num_cores=1, isa=ISA.X86)
+    simpoint = SimPoint()
+    simpoint.interval = args.simpoint_interval
+    # Needed to make gem5 instantiate and register the simpoint with the core
+    processor.get_cores()[0].core.simpointProbeListener = simpoint
 
-def setup_cores(args) -> SimpleProcessor:
-    o3_processor = SimpleProcessor(cpu_type=CPUTypes.O3, num_cores=1, isa=ISA.X86)
+    return processor
 
-    core = o3_processor.get_cores()[0].core
-    # Max instructions to simulate
-    # This is set after boot/before the ROI
-    # core.max_insts_any_thread = args.max_insts
+def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
+    print('Creating switchable processor (atomic -> runahead)')
+    switch_processor = SimpleSwitchableProcessor(
+        starting_core_type=CPUTypes.ATOMIC,
+        switch_core_type=CPUTypes.RUNAHEAD,
+        num_cores=1,
+        isa=ISA.X86,
+    )
 
-    # setup O3 core parameters
-    core.fetchWidth = args.fetch_width
-    core.decodeWidth = args.decode_width
-    core.renameWidth = args.rename_width
-    core.issueWidth = args.issue_width
-    core.wbWidth = args.writeback_width
-    core.commitWidth = args.commit_width
+    runahead_cores = list(filter(
+        lambda c: c[0].get_type() == CPUTypes.RUNAHEAD,
+        switch_processor._switchable_cores.values()
+    ))[0]
+    print(runahead_cores)
 
-    core.numROBEntries = args.rob_size
+    core: SimpleCore
+    for core in runahead_cores:
+        # grab the simobject core. yeah it doesn't make much sense.
+        sim_core: SimObject = core.core
+        print(f'Configuring {sim_core}...')
+        # Max insts to simulate
+        sim_core.max_insts_any_thread = args.max_insts
 
-    core.numIQEntries = args.iq_size
-    core.LQEntries = args.lq_size
-    core.SQEntries = args.sq_size
+        # Use runahead?
+        sim_core.enableRunahead = args.enable_runahead
 
-    core.numPhysIntRegs = args.int_regs
-    core.numPhysFloatRegs = args.fp_regs
-    core.numPhysVecRegs = args.vec_regs
+        # setup O3 core parameters
+        sim_core.fetchWidth = args.fetch_width
+        sim_core.decodeWidth = args.decode_width
+        sim_core.renameWidth = args.rename_width
+        sim_core.issueWidth = args.issue_width
+        sim_core.wbWidth = args.writeback_width
+        sim_core.commitWidth = args.commit_width
 
-    core.branchPred = TAGE_SC_L_8KB()
+        sim_core.numROBEntries = args.rob_size
 
-    # Functional units
-    core.fuPool = DefaultFUPool()
-    core.fuPool.FUList[0].count = args.int_alus  # int ALU
-    core.fuPool.FUList[1].count = args.int_mds  # int mul/div
-    core.fuPool.FUList[2].count = args.fp_alus  # fp ALU
-    core.fuPool.FUList[3].count = args.fp_mds  # fp mul/div
-    core.fuPool.FUList[8].count = args.mem_ports  # r/w mem port
+        sim_core.numIQEntries = args.iq_size
+        sim_core.LQEntries = args.lq_size
+        sim_core.SQEntries = args.sq_size
 
-    return o3_processor
+        sim_core.numPhysIntRegs = args.int_regs
+        sim_core.numPhysFloatRegs = args.fp_regs
+        sim_core.numPhysVecRegs = args.vec_regs
+
+        sim_core.branchPred = TAGE_SC_L_8KB()
+
+        # Functional units
+        sim_core.fuPool.FUList[0].count = args.int_alus  # int ALU
+        sim_core.fuPool.FUList[1].count = args.int_mds  # int mul/div
+        sim_core.fuPool.FUList[2].count = args.fp_alus  # fp ALU
+        sim_core.fuPool.FUList[3].count = args.fp_mds  # fp mul/div
+        sim_core.fuPool.FUList[8].count = args.mem_ports  # r/w mem port
+
+    return switch_processor
+
+
+def setup_cores(args) -> Union[SimpleProcessor, SimpleSwitchableProcessor]:
+    print('Configuring processor...')
+    if args.simpoint_interval > 0:
+        return setup_simpoint_profiling_processor(args)
+    else:
+        return setup_runahead_processor(args)
