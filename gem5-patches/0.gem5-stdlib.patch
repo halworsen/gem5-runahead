@@ -1,0 +1,85 @@
+diff --git a/src/python/gem5/components/cachehierarchies/chi/nodes/abstract_node.py b/src/python/gem5/components/cachehierarchies/chi/nodes/abstract_node.py
+index e8797b6de8..c89ca63809 100644
+--- a/src/python/gem5/components/cachehierarchies/chi/nodes/abstract_node.py
++++ b/src/python/gem5/components/cachehierarchies/chi/nodes/abstract_node.py
+@@ -95,7 +95,7 @@ class AbstractNode(Cache_Controller):
+         2. The x86 mwait instruction is built on top of coherence
+         3. The local exclusive monitor in ARM systems
+         """
+-        if core.get_type() is CPUTypes.O3 or target_isa in (ISA.X86, ISA.ARM):
++        if core.get_type() in (CPUTypes.O3, CPUTypes.RUNAHEAD) or target_isa in (ISA.X86, ISA.ARM):
+             return True
+         return False
+ 
+diff --git a/src/python/gem5/components/cachehierarchies/ruby/caches/abstract_l1_cache.py b/src/python/gem5/components/cachehierarchies/ruby/caches/abstract_l1_cache.py
+index 7f014dc382..ed5a824ee7 100644
+--- a/src/python/gem5/components/cachehierarchies/ruby/caches/abstract_l1_cache.py
++++ b/src/python/gem5/components/cachehierarchies/ruby/caches/abstract_l1_cache.py
+@@ -66,7 +66,7 @@ class AbstractL1Cache(L1Cache_Controller):
+         2. The x86 mwait instruction is built on top of coherence
+         3. The local exclusive monitor in ARM systems
+         """
+-        if core.get_type() is CPUTypes.O3 or target_isa in (ISA.X86, ISA.ARM):
++        if core.get_type() is (CPUTypes.O3, CPUTypes.RUNAHEAD) or target_isa in (ISA.X86, ISA.ARM):
+             return True
+         return False
+ 
+diff --git a/src/python/gem5/components/processors/abstract_core.py b/src/python/gem5/components/processors/abstract_core.py
+index 32f597d8e2..bc033d6bce 100644
+--- a/src/python/gem5/components/processors/abstract_core.py
++++ b/src/python/gem5/components/processors/abstract_core.py
+@@ -135,6 +135,7 @@ class AbstractCore(SubSystem):
+         _cpu_types_string_map = {
+             CPUTypes.ATOMIC : "AtomicSimpleCPU",
+             CPUTypes.O3 : "O3CPU",
++            CPUTypes.RUNAHEAD: "RunaheadCPU",
+             CPUTypes.TIMING : "TimingSimpleCPU",
+             CPUTypes.KVM : "KvmCPU",
+             CPUTypes.MINOR : "MinorCPU",
+@@ -155,6 +156,8 @@ class AbstractCore(SubSystem):
+             # For some reason, the KVM CPU is under "m5.objects" not the
+             # "m5.objects.{ISA}CPU".
+             module_str = f"m5.objects"
++        elif cpu_type == CPUTypes.RUNAHEAD:
++            module_str = f"m5.objects.{_isa_string_map[isa]}RECPU"
+         else:
+             module_str = f"m5.objects.{_isa_string_map[isa]}CPU"
+ 
+diff --git a/src/python/gem5/components/processors/cpu_types.py b/src/python/gem5/components/processors/cpu_types.py
+index 969b7a1bd1..e9ffe5b886 100644
+--- a/src/python/gem5/components/processors/cpu_types.py
++++ b/src/python/gem5/components/processors/cpu_types.py
+@@ -32,6 +32,7 @@ class CPUTypes(Enum):
+     ATOMIC = "atomic"
+     KVM = "kvm"
+     O3 = "o3"
++    RUNAHEAD = "runahead"
+     TIMING = "timing"
+     MINOR = "minor"
+ 
+diff --git a/src/python/gem5/components/processors/simple_processor.py b/src/python/gem5/components/processors/simple_processor.py
+index 3c9c5c84df..3be5248d37 100644
+--- a/src/python/gem5/components/processors/simple_processor.py
++++ b/src/python/gem5/components/processors/simple_processor.py
+@@ -92,7 +92,7 @@ class SimpleProcessor(AbstractProcessor):
+             board.kvm_vm = self.kvm_vm
+ 
+         # Set the memory mode.
+-        if self._cpu_type in (CPUTypes.TIMING, CPUTypes.O3, CPUTypes.MINOR):
++        if self._cpu_type in (CPUTypes.TIMING, CPUTypes.O3, CPUTypes.MINOR, CPUTypes.RUNAHEAD):
+             board.set_mem_mode(MemMode.TIMING)
+         elif self._cpu_type == CPUTypes.KVM:
+             board.set_mem_mode(MemMode.ATOMIC_NONCACHING)
+diff --git a/src/python/gem5/components/processors/simple_switchable_processor.py b/src/python/gem5/components/processors/simple_switchable_processor.py
+index 52ba013306..a731a24189 100644
+--- a/src/python/gem5/components/processors/simple_switchable_processor.py
++++ b/src/python/gem5/components/processors/simple_switchable_processor.py
+@@ -72,7 +72,7 @@ class SimpleSwitchableProcessor(SwitchableProcessor):
+         self._switch_key = "switch"
+         self._current_is_start = True
+ 
+-        if starting_core_type in (CPUTypes.TIMING, CPUTypes.O3):
++        if starting_core_type in (CPUTypes.TIMING, CPUTypes.O3, CPUTypes.RUNAHEAD):
+             self._mem_mode = MemMode.TIMING
+         elif starting_core_type == CPUTypes.KVM:
+             self._mem_mode = MemMode.ATOMIC_NONCACHING

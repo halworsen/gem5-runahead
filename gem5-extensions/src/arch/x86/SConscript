@@ -1,3 +1,5 @@
 Import('*')
 
+Source('misc_ext.cc', tags='x86 isa')
 SimObject('RunaheadCPU.py', sim_objects=[], tags='x86 isa')
+SimObject('X86RECPU.py', sim_objects=[], tags='x86 isa')
