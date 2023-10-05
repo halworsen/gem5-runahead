@@ -10,7 +10,7 @@ class Plotter:
     description = 'base plotter class'
     ''' Description of what kind of plot this plotter makes '''
 
-    def __init__(self, data: dict):
+    def __init__(self, data: list[dict]):
         self.data = data
 
     def plot(self) -> None:

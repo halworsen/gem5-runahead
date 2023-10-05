@@ -1,6 +1,7 @@
 from plotters.histograms.load_to_use import LoadToUse
 from plotters.histograms.fetched_between_re import InterimInsts
 from plotters.histograms.re_cycles import RECycles
+from plotters.histograms.trigger_in_flight_cycles import TriggerInFlightCycles
 
 from argparse import ArgumentParser
 from os import makedirs
@@ -10,16 +11,18 @@ import json
 import matplotlib.pyplot as plt
 
 ALL_PLOTS = [
-    # LoadToUse,
+    LoadToUse,
     InterimInsts,
     RECycles,
+    TriggerInFlightCycles,
 ]
 
 parser = ArgumentParser()
 parser.add_argument(
-    'statfile', metavar='file',
+    'statfiles', metavar='files',
     type=str,
-    help='path to parsed stats json file',
+    nargs='+',
+    help='path to parsed stats json file(s)',
 )
 parser.add_argument(
     '--out', metavar='plots_path',
@@ -39,19 +42,20 @@ parser.add_argument(
 if __name__ == '__main__':
     opts = parser.parse_args()
 
-    if not os.path.exists(opts.statfile) or opts.statfile[-5:] != '.json':
-        print('Unable to find parsed stats at the given path')
-        exit(1)
-
     if not os.path.exists(opts.out):
         makedirs(opts.out)
 
-    data = None
-    with open(opts.statfile, 'r') as f:
-        data = json.load(f)
+    data = []
+    for path in opts.statfiles:
+        if not os.path.exists(path) or path[-5:] != '.json':
+            print('Unable to find parsed stats at the given path')
+            exit(1)
+
+        with open(path, 'r') as f:
+            data.append(json.load(f))
     
     # Get the stat section to use
-    sections = data['sectionNames']
+    sections = data[0]['sectionNames']
     used_section = ''
     if opts.section:
         if not opts.section in sections:
@@ -61,8 +65,11 @@ if __name__ == '__main__':
     else:
         used_section = sections[0]
 
-    plotter_data = filter(lambda s: s['sectionName'] == used_section, data['sections']).__next__()
-    plotter_data = plotter_data['stats']
+    plotter_data = []
+    for _d in data:
+        section = filter(lambda s: s['sectionName'] == used_section, _d['sections']).__next__()
+        plotter_data.append(section['stats'])
+
     for plotter in ALL_PLOTS:
         plotter = plotter(plotter_data)
         
