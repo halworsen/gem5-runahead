@@ -64,7 +64,7 @@
         {
             "label": "Kill SLURM jobs",
             "type": "shell",
-            "command": "squeue --me -h -o \"%i\" | xargs scancel",
+            "command": "squeue --me -h -o \"%i\" | xargs \"scancel --signal=SIGINT -f\"",
             "group": "none",
             "isBackground": false,
             "problemMatcher": []

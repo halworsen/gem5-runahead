@@ -13,6 +13,8 @@ from gem5.resources.resource import CustomResource, CustomDiskImageResource
 from core import setup_cores, add_core_args
 from memory import setup_cache, setup_memory, add_memory_args
 from options import add_parser_args
+from simpoints import parse_simpoints
+import simulate
 
 # Require X86 ISA
 requires(isa_required=ISA.X86)
@@ -64,44 +66,24 @@ m5.disableAllListeners()
 
 root = Root(full_system=True, system=board)
 
-m5.instantiate()
+if args.restore_checkpoint:
+    m5.instantiate(args.restore_checkpoint)
+else:
+    m5.instantiate()
 m5.stats.reset()
 
 print(f'Beginning simulation @ {datetime.now()}')
-print('Performing boot...')
 
-assert(root.system.readfile == args.script)
-
-exit_event = m5.simulate()
-tick = m5.curTick()
-cause = exit_event.getCause()
-
-# Boot completed successfully, dump stats and switch cores
-if cause == 'm5_exit instruction encountered':
-    print(f'Boot completed @ {datetime.now()}')
-    print(f'Sim tick: t{tick}')
-    print('Dumping and resetting simulation statistics...')
-
-    m5.stats.dump()
-    m5.stats.reset()
-
-    # Switch to the detailed core (unless doing simpoint profiling)
-    if args.simpoint_interval == 0:
-        processor.switch()
-# Something went wrong
+if args.simpoint_checkpoints:
+    exit_event, ticks, cause = simulate.sim_fs_simpoint_checkpoints(root, args)
+elif args.simpoint_interval:
+    # Processor setup will have inserted the simpoint probe. Simulate as normal (on the simple core)
+    exit_event, ticks, cause = simulate.sim_fs_normal(root, args, switch_core=False)
 else:
-    print(f'Unexpected exit occured @ t{tick}')
-    print(f'Exit cause: {cause}')
-    exit(1)
-
-print('Resuming simulation...')
-
-exit_event = m5.simulate()
-tick = m5.curTick()
-cause = exit_event.getCause()
+    exit_event, ticks, cause = simulate.sim_fs_normal(root, args, switch_core=True)
 
 print(f'Finished simulation @ {datetime.now()}')
-print(f'Exit cause: {cause}')
+print(f'Final exit cause: {cause}')
 
 print('Dumping statistics')
 m5.stats.dump()

@@ -1,13 +1,13 @@
 from typing import Any, Union
 from gem5.isas import ISA
-from gem5.components.processors.cpu_types import CPUTypes, get_cpu_type_from_str
+from gem5.components.processors.cpu_types import CPUTypes
 from gem5.components.processors.simple_switchable_processor import SimpleSwitchableProcessor
 from gem5.components.processors.simple_processor import SimpleProcessor
-from m5.objects.FUPool import DefaultFUPool
 from m5.objects.BranchPredictor import TAGE_SC_L_8KB
 from gem5.components.processors.simple_core import SimpleCore
 from m5.objects import SimObject
 from m5.objects.SimPoint import SimPoint
+from simpoints import parse_simpoints
 
 def add_core_args(parser):
     cpu_group = parser.add_argument_group(title='CPU Parameters')
@@ -38,13 +38,30 @@ def add_core_args(parser):
     cpu_group.add_argument('--fp-mds', default=1, type=int, help='Floating point multiply/divide FUs')
     cpu_group.add_argument('--mem-ports', default=2, type=int, help='Memory port FUs')
 
-def setup_simpoint_profiling_processor(args) -> SimpleProcessor:
-    print('Creating atomic processor for simpoint BBV analysis')
+def setup_simpoint_processor(args) -> SimpleProcessor:
+    print('Creating atomic processor for simpoint profiling or checkpointing')
     processor = SimpleProcessor(cpu_type=CPUTypes.ATOMIC, num_cores=1, isa=ISA.X86)
-    simpoint = SimPoint()
-    simpoint.interval = args.simpoint_interval
-    # Needed to make gem5 instantiate and register the simpoint with the core
-    processor.get_cores()[0].core.simpointProbeListener = simpoint
+    sim_core = processor.get_cores()[0].core
+
+    if args.max_insts > 0:
+        sim_core.max_insts_any_thread = args.max_insts
+
+    # Setup the simpoint probe if doing simpoint profiling
+    if args.simpoint_interval > 0 and not args.simpoint_checkpoints:
+        simpoint = SimPoint()
+        simpoint.interval = args.simpoint_interval
+        # Needed to make gem5 instantiate and register the simpoint with the core
+        sim_core.simpointProbeListener = simpoint
+
+    # If we're taking simpoint checkpoints, setup the start counts for each simpoint
+    if args.simpoint_checkpoints:
+        simpoints = parse_simpoints(args)
+        start_insts = []
+        for sp in simpoints:
+            start_inst = (sp['insts'] - sp['warmup'])
+            print(f'Inserting simpoint #{sp["id"]}: at {sp["insts"]} insts, {sp["warmup"]} warmup insts => start at {start_inst} insts.')
+            start_insts.append(start_inst)
+        sim_core.simpoint_start_insts = start_insts
 
     return processor
 
@@ -68,8 +85,10 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
         # grab the simobject core. yeah it doesn't make much sense.
         sim_core: SimObject = core.core
         print(f'Configuring {sim_core}...')
+
         # Max insts to simulate
-        sim_core.max_insts_any_thread = args.max_insts
+        if args.max_insts > 0:
+            sim_core.max_insts_any_thread = args.max_insts
 
         # Use runahead?
         sim_core.enableRunahead = args.enable_runahead
@@ -106,7 +125,7 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
 
 def setup_cores(args) -> Union[SimpleProcessor, SimpleSwitchableProcessor]:
     print('Configuring processor...')
-    if args.simpoint_interval > 0:
-        return setup_simpoint_profiling_processor(args)
+    if args.simpoint_interval > 0 or args.simpoint_checkpoints:
+        return setup_simpoint_processor(args)
     else:
         return setup_runahead_processor(args)

@@ -16,7 +16,7 @@ class L3Cache(Cache):
         assoc: int = 12,
         tag_latency: int = 30,
         data_latency: int = 30,
-        response_latency: int = 1,
+        response_latency: int = 30,
         mshrs: int = 20,
         tgts_per_mshr: int = 12,
         writeback_clean: bool = True,
@@ -80,10 +80,10 @@ class ThreeLevelCacheHierarchy(
 
     @overrides(AbstractCacheHierarchy)
     def incorporate_cache(self, board: AbstractBoard):
-        self.l1d_cache = L1DCache(self._l1d_size, self._l1d_assoc, tag_latency=4, data_latency=4)
-        self.l1i_cache = L1ICache(self._l1i_size, self._l1i_assoc, tag_latency=4, data_latency=4)
-        self.l2_cache = L2Cache(self._l2_size, self._l2_assoc, tag_latency=8, data_latency=8)
-        self.l3_cache = L3Cache(self._l3_size, self._l3_assoc, tag_latency=30, data_latency=30)
+        self.l1d_cache = L1DCache(self._l1d_size, self._l1d_assoc, tag_latency=4, data_latency=4, response_latency=4)
+        self.l1i_cache = L1ICache(self._l1i_size, self._l1i_assoc, tag_latency=4, data_latency=4, response_latency=4)
+        self.l2_cache = L2Cache(self._l2_size, self._l2_assoc, tag_latency=8, data_latency=8, response_latency=8)
+        self.l3_cache = L3Cache(self._l3_size, self._l3_assoc, tag_latency=30, data_latency=30, response_latency=30)
 
         # ITLB Page walk caches
         self.iptw_cache = MMUCache(size='8KiB')

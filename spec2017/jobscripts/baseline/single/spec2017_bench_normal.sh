@@ -1,19 +1,43 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017"
+#SBATCH --job-name="gem5-spec2017-bench-no-re"
 #SBATCH --account=ie-idi
-#SBATCH --mail-user=markus@halvorsenfamilien.com
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=2000
+#SBATCH --mem=4000
 #SBATCH --time=7-06:00:00
-#SBATCH --signal=SIGINT
+#SBATCH --signal=B:SIGINT@120
+
+#
+# Restore from a checkpoint then switch cores to the runahead CPU for simulation
+#
+
+declare -A CHECKPOINTS
+CHECKPOINTS=(
+    ["perlbench_s_0"]=""
+    ["perlbench_s_1"]=""
+    ["perlbench_s_2"]=""
+    ["gcc_s_1"]="cpt_17042282256812_sp-5_interval-226_insts-22600000000_warmup-1000000"
+    ["gcc_s_2"]="cpt_13527511076677_sp-6_interval-175_insts-17500000000_warmup-1000000"
+    ["mcf_s_0"]="cpt_19962348413297_sp-4_interval-303_insts-30300000000_warmup-1000000"
+    ["cactuBSSN_s_0"]="cpt_3967868295569_sp-8_interval-42_insts-4200000000_warmup-1000000"
+    ["omnetpp_s_0"]="cpt_11595386405228_sp-0_interval-147_insts-14700000000_warmup-1000000"
+    ["wrf_s_0"]="cpt_1843422166344_sp-2_interval-9_insts-900000000_warmup-1000000"
+    ["xalancbmk_s_0"]="cpt_6663676485929_sp-3_interval-78_insts-7800000000_warmup-1000000"
+    ["x264_s_0"]=""
+    ["x264_s_2"]=""
+    ["imagick_s_0"]=""
+    ["nab_s_0"]=""
+    ["exchange2_s_0"]=""
+    ["fotonik3d_s_0"]=""
+)
 
 SPEC2017_DIR=/cluster/home/markuswh/gem5-runahead/spec2017
-RUNSCRIPT_DIR="$SPEC2017_DIR/scripts"
+RUNSCRIPT_DIR="$SPEC2017_DIR/runscripts"
 BENCHMARK=$1
+CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
 RUNSCRIPT="$RUNSCRIPT_DIR/$BENCHMARK.rcS"
 
 # sanity check
@@ -28,7 +52,9 @@ if ! [[ -d "$LOG_DIR" ]]; then
     mkdir -p "$LOG_DIR"
 fi
 
-M5_OUT_DIR="$LOG_DIR/m5out"
+M5_OUT_DIR="$LOG_DIR/m5out-${SLURM_JOB_NAME}"
+CHECKPOINT_DIR="$LOG_DIR/checkpoints"
+SIMPOINT_DIR="$LOG_DIR/simpoints"
 SIMOUT_FILE="$LOG_DIR/${SLURM_JOB_NAME}_simout.log"
 SLURM_LOG_FILE="$LOG_DIR/${SLURM_JOB_NAME}_slurm.log"
 
@@ -46,7 +72,7 @@ echo "--- python packages ---"
 pip freeze
 
 echo
-echo "job: simulate SPEC2017 benchmark - $BENCHMARK"
+echo "job: simulate SPEC2017 benchmark at simpoint - $BENCHMARK"
 echo "time: $(date)"
 echo "--- start job ---"
 
@@ -54,8 +80,11 @@ FSPARAMS=(
     "--kernel=$SPEC2017_DIR/plinux"
     "--image=$SPEC2017_DIR/x86-3.img"
     "--script=$RUNSCRIPT"
-    "--max-insts=2000000000" # max 2 billion instructions
+    "--max-insts=101000000" # max 101M insts (warmup + simpoint interval)
     "--clock=3.2GHz"
+
+    # Instantiate using the given checkpoint
+    "--restore-checkpoint=$M5_OUT_DIR/../m5out-gem5-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
     "--no-runahead"
@@ -65,7 +94,7 @@ FSPARAMS=(
     "--l1d-size=32kB" "--l1d-assoc=8"
     "--l2-size=256kB" "--l2-assoc=8"
     "--l3-size=6MB" "--l3-assoc=12"
-    "--mem-size=2GB"
+    "--mem-size=3GB"
 
     # Pipeline stage widths
     "--fetch-width=4" "--decode-width=4" "--rename-width=4"

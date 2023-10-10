@@ -3,19 +3,36 @@ def add_parser_args(parser):
 
     sim_group.add_argument(
         '--max-insts',
-        help='Max amount of instructions to simulate on the detailed core.'
+        help='Max amount of instructions to simulate on the detailed core.',
+        default=0,
+        type=int,
     )
 
     sim_group.add_argument(
-        '--checkpoint-dir',
-        help='The directory in which to store check- and simpoints',
+        '--simpoint-interval',
+        help='Perform a simpoint analysis with the given interval. If taking simpoint checkpoints, '
+        'defines the interval at which the simpoints were taken.',
+        default=0,
+        type=int,
+    )
+    sim_group.add_argument(
+        '--simpoint-checkpoints',
+        help='Use a simple CPU to take checkpoints at every simpoint defined by the given file',
+        default='',
         type=str,
     )
     sim_group.add_argument(
-        '--simpoint-interval',
-        help='The interval at which to record simpoints. 0 to disable',
+        '--warmup-insts',
+        help='If taking checkpoints, checkpoint N insts earlier to allow for warmup just before the checkpoint',
         default=0,
         type=int,
+    )
+
+    sim_group.add_argument(
+        '--restore-checkpoint',
+        help='Restore simulation state using the given checkpoint',
+        default='',
+        type=str,
     )
 
     board_group = parser.add_argument_group(title='Board parameters')
