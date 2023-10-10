@@ -137,6 +137,18 @@ Commit::Commit(CPU *_cpu, const BaseRunaheadCPUParams &params)
         htmStops[tid] = 0;
     }
     interrupt = NoFault;
+
+    // Setup runahead exit policy
+    if (params.runaheadExitPolicy == "Eager") {
+        runaheadExitPolicy = REExitPolicy::Eager;
+    } else if (params.runaheadExitPolicy == "FixedDelayed") {
+        runaheadExitPolicy = REExitPolicy::FixedDelayed;
+        fixedDelayedExitDelay = params.runaheadFixedExitLength;
+    } else if (params.runaheadExitPolicy == "DynamicDelayed") {
+        runaheadExitPolicy = REExitPolicy::DynamicDelayed;
+    } else {
+        runaheadExitPolicy = REExitPolicy::Eager;
+    }
 }
 
 std::string Commit::name() const { return cpu->name() + ".commit"; }
@@ -556,8 +568,26 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
     DPRINTF(RunaheadCommit, "[tid:%i] Runahead exit signal received, cause inst sn: %llu, PC: %s.\n",
                      tid, inst->seqNum, inst->pcState());
 
-    exitRunahead[tid] = true;
+    runaheadExitable[tid] = true;
     runaheadCause[tid] = inst;
+
+    // Handle the signal according to the exit policy
+
+    if (runaheadExitPolicy == REExitPolicy::Eager) {
+        DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead ASAP due to eager exit policy.\n",
+                tid);
+        exitRunahead[tid] = true;
+    } else if (runaheadExitPolicy == REExitPolicy::FixedDelayed) {
+        DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead in %llu cycles due to fixed delayed exit policy.\n",
+                tid, fixedDelayedExitDelay);
+        EventFunctionWrapper *exitEvent = new EventFunctionWrapper(
+            [this, tid]{ exitRunahead[tid] = true; },
+            "RunaheadExit", true, Event::CPU_Tick_Pri
+        );
+        cpu->schedule(exitEvent, Cycles(fixedDelayedExitDelay));
+    } else if (runaheadExitPolicy == DynamicDelayed) {
+        panic("dynamic delayed runahead exit is unimplemented!");
+    }
 }
 
 void

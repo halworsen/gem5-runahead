@@ -1708,7 +1708,7 @@ CPU::enterRunahead(ThreadID tid)
 void
 CPU::runaheadLLLReturn(ThreadID tid)
 {
-    DPRINTF(RunaheadCPU, "[tid:%i] Signalling to commit that runahead can be exited.\n", tid);
+    DPRINTF(RunaheadCPU, "[tid:%i] Signalling commit that runahead is safe to exit.\n", tid);
     const DynInstPtr &lll = runaheadCause[tid];
     commit.signalExitRunahead(tid, lll);
 }

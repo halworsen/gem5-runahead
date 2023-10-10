@@ -373,6 +373,20 @@ class Commit
     /** Records if a thread has to squash this cycle due to an XC write. */
     bool tcSquash[MaxThreads];
 
+    /** Records if a thread is able to safely exit runahead */
+    bool runaheadExitable[MaxThreads] = { false };
+
+    /** Runahead exit policies */
+    enum REExitPolicy {
+        Eager = 0,
+        FixedDelayed = 1,
+        DynamicDelayed = 2,
+    };
+    /** The runahead exit policy being used */
+    REExitPolicy runaheadExitPolicy;
+    /** For FixedDelayed policy: how many cycles to wait until exiting */
+    int fixedDelayedExitDelay;
+
     /** Records if a thread should exit runahead this cycle */
     bool exitRunahead[MaxThreads] = { false };
 

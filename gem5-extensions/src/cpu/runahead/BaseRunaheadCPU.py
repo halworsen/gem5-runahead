@@ -173,6 +173,18 @@ class BaseRunaheadCPU(BaseCPU):
 
     runaheadCacheSize = Param.MemorySize('2kB', "Runahead cache capacity")
 
+    runaheadExitPolicy = Param.String(
+        'Eager',
+        'The exit policy that should be used with runahead execution. This determines when '
+        'runahead exits after the LLL returns. Must be one of: '
+        '"Eager", "FixedDelayed", "DynamicDelayed"'
+    )
+    runaheadFixedExitLength = Param.Int(
+        100,
+        'If using the "FixedDelayed" runahead exit policy, '
+        'how many cycles to wait until runahead is exited.'
+    )
+
     filterRunaheadInstructions = Param.Bool(
         True,
         'In runahead, should the CPU filter instructions to only loads'
