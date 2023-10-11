@@ -776,6 +776,9 @@ class LSQ
      */
     bool violation(ThreadID tid);
 
+    /** Get the LSQ unit for the given thread */
+    const LSQUnit &getUnit(ThreadID tid);
+
     /** Gets the instruction that caused the memory ordering violation. */
     DynInstPtr getMemDepViolator(ThreadID tid);
 

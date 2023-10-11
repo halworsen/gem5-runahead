@@ -351,6 +351,12 @@ LSQ::violation()
 
 bool LSQ::violation(ThreadID tid) { return thread.at(tid).violation(); }
 
+const LSQUnit &
+LSQ::getUnit(ThreadID tid)
+{
+    return thread.at(tid);
+}
+
 DynInstPtr
 LSQ::getMemDepViolator(ThreadID tid)
 {

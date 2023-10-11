@@ -149,6 +149,12 @@ class ROB
      */
     DynInstPtr readTailInst(ThreadID tid);
 
+    /** Get an iterator corresponding to the beginning of the ROB */
+    std::list<DynInstPtr>::iterator begin(ThreadID tid) { return instList[tid].begin(); }
+
+    /** Get an iterator corresponding to the end of the ROB */
+    std::list<DynInstPtr>::iterator end(ThreadID tid) { return instList[tid].end(); }
+
     /** Retires the head instruction, removing it from the ROB. */
 //    void retireHead();
 
