@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-baseline-o3"
+#SBATCH --job-name="gem5-spec2017-bench-traditional-re"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -87,7 +87,10 @@ FSPARAMS=(
     "--restore-checkpoint=$M5_OUT_DIR/../m5out-gem5-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
-    "--no-runahead"
+    "--lll-threshold=3"
+    "--rcache-size=2kB"
+    "--lll-latency-threshold=100"
+    "--runahead-exit-policy=Eager"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"
@@ -117,6 +120,7 @@ echo "spec2017.py parameters:"
 echo "$PARAMS"
 echo
 
-./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
+./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
+    --debug-flags=Runahead,O3CPUAll \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE

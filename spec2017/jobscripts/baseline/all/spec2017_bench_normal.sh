@@ -3,6 +3,7 @@
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
+#SBATCH --array=1-16%8
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
@@ -13,6 +14,22 @@
 #
 # Restore from a checkpoint then switch cores to the runahead CPU for simulation
 #
+
+ALL_BENCHMARKS=(
+    "perlbench_s_0" "perlbench_s_1" "perlbench_s_2"
+    "gcc_s_1" "gcc_s_2"
+    "mcf_s_0"
+    "cactuBSSN_s_0"
+    "omnetpp_s_0"
+    "wrf_s_0"
+    "xalancbmk_s_0"
+    "x264_s_0"
+    "x264_s_2"
+    "imagick_s_0"
+    "nab_s_0"
+    "exchange2_s_0"
+    "fotonik3d_s_0"
+)
 
 declare -A CHECKPOINTS
 CHECKPOINTS=(
@@ -36,7 +53,7 @@ CHECKPOINTS=(
 
 SPEC2017_DIR=/cluster/home/markuswh/gem5-runahead/spec2017
 RUNSCRIPT_DIR="$SPEC2017_DIR/runscripts"
-BENCHMARK=$1
+BENCHMARK=${ALL_BENCHMARKS[$SLURM_ARRAY_TASK_ID - 1]}
 CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
 RUNSCRIPT="$RUNSCRIPT_DIR/$BENCHMARK.rcS"
 

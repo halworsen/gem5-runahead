@@ -1,6 +1,9 @@
 __pycache__/
 .cache/
 
+# SimPoint
+SimPoint.3.2/
+
 # gem5 simulation output (stats, configs, etc.)
 m5out/
 # debug output
