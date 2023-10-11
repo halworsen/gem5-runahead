@@ -742,7 +742,9 @@ public:
         // Histogram of amount of instructions pseudoretired by runahead execution
         statistics::Histogram instsPseudoRetiredPerPeriod;
         // Histogram of instructions fetched between runahead periods
-        statistics::Distribution instsBetweenRunahead;
+        statistics::Distribution instsFetchedBetweenRunahead;
+        // Histogram of instructions retired between runahead periods
+        statistics::Distribution instsRetiredBetweenRunahead;
         // Histogram of cycles a load has been in-flight when it triggered runahead
         statistics::Histogram triggerLLLinFlightCycles;
 

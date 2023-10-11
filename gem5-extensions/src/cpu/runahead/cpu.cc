@@ -409,8 +409,10 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "Amount of times the CPU refused to enter into runahead"),
       ADD_STAT(instsPseudoRetiredPerPeriod, statistics::units::Count::get(),
                "Amount of instructions pseudoretired by runahead execution periods"),
-      ADD_STAT(instsBetweenRunahead, statistics::units::Count::get(),
+      ADD_STAT(instsFetchedBetweenRunahead, statistics::units::Count::get(),
                "Amount of instructions fetched between runahead periods"),
+      ADD_STAT(instsRetiredBetweenRunahead, statistics::units::Count::get(),
+               "Amount of instructions retired between runahead periods"),
       ADD_STAT(triggerLLLinFlightCycles, statistics::units::Cycle::get(),
                "Amount of cycles a load has been in-flight when it triggered runahead"),
       ADD_STAT(intRegPoisoned, statistics::units::Count::get(),
@@ -527,7 +529,11 @@ CPU::CPUStats::CPUStats(CPU *cpu)
         .init(12)
         .flags(statistics::total);
 
-    instsBetweenRunahead
+    instsFetchedBetweenRunahead
+        .init(0, 2000, 100)
+        .flags(statistics::total);
+
+    instsRetiredBetweenRunahead
         .init(0, 2000, 100)
         .flags(statistics::total);
 
@@ -1722,7 +1728,8 @@ CPU::exitRunahead(ThreadID tid)
 
     cpuStats.runaheadCycles.sample(timeInRunahead);
     cpuStats.instsPseudoRetiredPerPeriod.sample(commit.instsPseudoretired[tid]);
-    cpuStats.instsBetweenRunahead.sample(fetch.instsBetweenRunahead[tid]);
+    cpuStats.instsFetchedBetweenRunahead.sample(fetch.instsBetweenRunahead[tid]);
+    cpuStats.instsRetiredBetweenRunahead.sample(commit.instsBetweenRunahead[tid]);
 
     // Resume normal mode
     DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to normal.\n", tid);
@@ -1731,6 +1738,7 @@ CPU::exitRunahead(ThreadID tid)
     // Impossible to have re-entered runahead without fetching new insts
     assert(fetch.instsBetweenRunahead[tid] > 0);
     fetch.instsBetweenRunahead[tid] = 0;
+    commit.instsBetweenRunahead[tid] = 0;
 }
 
 void

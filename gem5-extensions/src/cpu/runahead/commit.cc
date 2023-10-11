@@ -721,6 +721,7 @@ Commit::squashFromRunaheadExit(ThreadID tid)
     cpu->activityThisCycle();
     // Let the CPU exit runahead mode now that the squash has been signalled
     cpu->exitRunahead(tid);
+    runaheadExitable[tid] = false;
 }
 
 void
@@ -1588,6 +1589,9 @@ Commit::updateComInstStats(const DynInstPtr &inst)
 
     if (!inst->isMicroop() || inst->isLastMicroop()) {
         stats.instsCommitted[tid]++;
+        if (!cpu->inRunahead(tid))
+            instsBetweenRunahead[tid]++;
+
         if (inst->isRunahead()) {
             stats.instsPseudoretired[tid]++;
             instsPseudoretired[tid]++;

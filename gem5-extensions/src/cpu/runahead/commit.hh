@@ -350,6 +350,9 @@ class Commit
     /** The amount of instructions pseudoretired in the current runahead period */
     uint64_t instsPseudoretired[MaxThreads];
 
+    /** Instructions retired since last runahead exit and before earliest runahead entry */
+    int instsBetweenRunahead[MaxThreads] = { 0 };
+
   private:
     /** Pointer to RunaheadCPU. */
     CPU *cpu;
