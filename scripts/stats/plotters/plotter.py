@@ -9,9 +9,12 @@ class Plotter:
     ''' Filename of the output plot '''
     description = 'base plotter class'
     ''' Description of what kind of plot this plotter makes '''
-
-    def __init__(self, data: list[dict]):
-        self.data = data
+    
+    def load_data(self) -> None:
+        '''
+        Load any data required to produce the plot
+        '''
+        pass
 
     def plot(self) -> None:
         '''
