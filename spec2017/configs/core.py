@@ -13,7 +13,13 @@ def add_core_args(parser):
     cpu_group = parser.add_argument_group(title='CPU Parameters')
 
     cpu_group.add_argument('--no-runahead', action='store_false', dest='enable_runahead')
-    cpu_group.set_defaults(enable_runahead=True)
+    cpu_group.add_argument('--lll-threshold', default=3, help='Memory depth at which a load is considered a LLL')
+    cpu_group.add_argument('--rcache-size', default='2kB', help='Size of the runahead cache')
+    cpu_group.add_argument('--runahead-exit-policy', default='Eager', help='Runahead exit policy')
+    cpu_group.add_argument('--fixed-exit-latency', default=100, help='If using FixedDelayed RE exit policy, how long to wait before exiting')
+    cpu_group.add_argument('--lll-latency-threshold', default=100, help='Max load latency before runahead can no longer be entered')
+    cpu_group.add_argument('--overlapping-runahead', action='store_true', dest='overlapping_runahead', help='Allow overlapping runahead periods')
+    cpu_group.set_defaults(enable_runahead=True, overlapping_runahead=False)
 
     cpu_group.add_argument('--rob-size', default=224, type=int, help='The amount of ROB entries')
 
@@ -39,7 +45,7 @@ def add_core_args(parser):
     cpu_group.add_argument('--mem-ports', default=2, type=int, help='Memory port FUs')
 
 def setup_simpoint_processor(args) -> SimpleProcessor:
-    print('Creating atomic processor for simpoint profiling or checkpointing')
+    print('Creating atomic processor for simpoint profiling')
     processor = SimpleProcessor(cpu_type=CPUTypes.ATOMIC, num_cores=1, isa=ISA.X86)
     sim_core = processor.get_cores()[0].core
 
@@ -53,16 +59,6 @@ def setup_simpoint_processor(args) -> SimpleProcessor:
         # Needed to make gem5 instantiate and register the simpoint with the core
         sim_core.simpointProbeListener = simpoint
 
-    # If we're taking simpoint checkpoints, setup the start counts for each simpoint
-    if args.simpoint_checkpoints:
-        simpoints = parse_simpoints(args)
-        start_insts = []
-        for sp in simpoints:
-            start_inst = (sp['insts'] - sp['warmup'])
-            print(f'Inserting simpoint #{sp["id"]}: at {sp["insts"]} insts, {sp["warmup"]} warmup insts => start at {start_inst} insts.')
-            start_insts.append(start_inst)
-        sim_core.simpoint_start_insts = start_insts
-
     return processor
 
 def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
@@ -74,11 +70,30 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
         isa=ISA.X86,
     )
 
+    atomic_cores = list(filter(
+        lambda c: c[0].get_type() == CPUTypes.ATOMIC,
+        switch_processor._switchable_cores.values()
+    ))[0]
+
+    core: SimpleCore
+    for core in atomic_cores:
+        sim_core: SimObject = core.core
+        print(f'Configuring {sim_core}...')
+
+        # If we're taking simpoint checkpoints, setup the start counts for each simpoint
+        if args.simpoint_checkpoints:
+            simpoints = parse_simpoints(args)
+            start_insts = []
+            for sp in simpoints:
+                start_inst = (sp['insts'] - sp['warmup'])
+                print(f'Inserting simpoint #{sp["id"]}: at {sp["insts"]} insts, {sp["warmup"]} warmup insts => start at {start_inst} insts.')
+                start_insts.append(start_inst)
+            sim_core.simpoint_start_insts = start_insts
+
     runahead_cores = list(filter(
         lambda c: c[0].get_type() == CPUTypes.RUNAHEAD,
         switch_processor._switchable_cores.values()
     ))[0]
-    print(runahead_cores)
 
     core: SimpleCore
     for core in runahead_cores:
@@ -90,8 +105,14 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
         if args.max_insts > 0:
             sim_core.max_insts_any_thread = args.max_insts
 
-        # Use runahead?
+        # Setup runahead parameters
         sim_core.enableRunahead = args.enable_runahead
+        sim_core.lllDepthThreshold = args.lll_threshold
+        sim_core.runaheadCacheSize = args.rcache_size
+        sim_core.runaheadExitPolicy = args.runahead_exit_policy
+        sim_core.runaheadFixedExitLength = args.fixed_exit_latency
+        sim_core.runaheadInFlightThreshold = args.lll_latency_threshold
+        sim_core.allowOverlappingRunahead = args.overlapping_runahead
 
         # setup O3 core parameters
         sim_core.fetchWidth = args.fetch_width
@@ -125,7 +146,9 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
 
 def setup_cores(args) -> Union[SimpleProcessor, SimpleSwitchableProcessor]:
     print('Configuring processor...')
-    if args.simpoint_interval > 0 or args.simpoint_checkpoints:
+    # If taking checkpoints we MUST use the detailed system configuration
+    # because checkpoints are not portable across system configurations!
+    if args.simpoint_interval > 0 and not args.simpoint_checkpoints:
         return setup_simpoint_processor(args)
     else:
         return setup_runahead_processor(args)

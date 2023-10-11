@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 from datetime import datetime
 
 import m5
@@ -29,6 +30,9 @@ add_core_args(parser)
 add_memory_args(parser)
 
 args = parser.parse_args()
+
+if args.restore_checkpoint:
+    args.restore_checkpoint = Path(args.restore_checkpoint).resolve().as_posix()
 
 print('Configuring system...')
 processor = setup_cores(args)
@@ -67,9 +71,8 @@ m5.disableAllListeners()
 root = Root(full_system=True, system=board)
 
 if args.restore_checkpoint:
-    m5.instantiate(args.restore_checkpoint)
-else:
-    m5.instantiate()
+    print(f'Restoring state from checkpoint: {args.restore_checkpoint}')
+m5.instantiate(args.restore_checkpoint)
 m5.stats.reset()
 
 print(f'Beginning simulation @ {datetime.now()}')
@@ -79,6 +82,8 @@ if args.simpoint_checkpoints:
 elif args.simpoint_interval:
     # Processor setup will have inserted the simpoint probe. Simulate as normal (on the simple core)
     exit_event, ticks, cause = simulate.sim_fs_normal(root, args, switch_core=False)
+elif args.restore_checkpoint:
+    exit_event, ticks, cause = simulate.sim_fs_from_checkpoint(root, args)
 else:
     exit_event, ticks, cause = simulate.sim_fs_normal(root, args, switch_core=True)
 

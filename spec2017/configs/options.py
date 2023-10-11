@@ -31,7 +31,7 @@ def add_parser_args(parser):
     sim_group.add_argument(
         '--restore-checkpoint',
         help='Restore simulation state using the given checkpoint',
-        default='',
+        default=None,
         type=str,
     )
 
