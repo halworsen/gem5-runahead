@@ -80,13 +80,14 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
         sim_core: SimObject = core.core
         print(f'Configuring {sim_core}...')
 
-        # If we're taking simpoint checkpoints, setup the start counts for each simpoint
+        # If we're taking simpoint checkpoints, setup the start counts for the highest weight simpoint
         if args.simpoint_checkpoints:
-            simpoints = parse_simpoints(args)
+            simpoints = parse_simpoints(args, highest_weight_only=True)
             start_insts = []
             for sp in simpoints:
                 start_inst = (sp['insts'] - sp['warmup'])
-                print(f'Inserting simpoint #{sp["id"]}: at {sp["insts"]} insts, {sp["warmup"]} warmup insts => start at {start_inst} insts.')
+                weight = sp["weight"]*100
+                print(f'Inserting simpoint #{sp["id"]} (W={weight:.2f}%): at {sp["insts"]} insts, {sp["warmup"]} warmup insts => start at {start_inst} insts.')
                 start_insts.append(start_inst)
             sim_core.simpoint_start_insts = start_insts
 

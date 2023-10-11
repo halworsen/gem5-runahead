@@ -48,6 +48,7 @@ def sim_fs_from_checkpoint(root, args):
     Simulate on a detailed core starting at a given checkpoint
     '''
     print('Restoring state from checkpoint. Switching to runahead CPU')
+
     root.system.processor.switch()
 
     exit_event = m5.simulate()
@@ -55,8 +56,7 @@ def sim_fs_from_checkpoint(root, args):
     cause = exit_event.getCause()
 
     simstats = m5.stats.gem5stats.get_simstat(root).to_json()
-    insts = int(simstats['system']['processor']['cores0']['core']\
-                    ['exec_context.thread_0']['numInsts']['value'])
+    insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
     print(f'Simmulated {insts} instructions in {tick} ticks')
 
     return (exit_event, tick, cause)
@@ -68,7 +68,7 @@ def sim_fs_simpoint_checkpoints(root, args):
     Checkpoints are never taken before boot has finished
     Although the system should be setup in the same way as a detailed run, we stay on the simple core
     '''
-    simpoints = parse_simpoints(args)
+    simpoints = parse_simpoints(args, highest_weight_only=True)
     boot_complete = False
 
     exit_event = None
@@ -105,7 +105,7 @@ def sim_fs_simpoint_checkpoints(root, args):
 
             # Take the simpoint checkpoint
             cpt_name = f'cpt_{tick}_sp-{sp["id"]}_interval-{sp["interval"]}_insts-{sp["insts"]}_warmup-{sp["warmup"]}'
-            print(f'Reached simpoint #{sp["insts"]}, taking checkpoint ({cpt_name}).')
+            print(f'Reached simpoint #{sp["id"]}, taking checkpoint ({cpt_name}).')
 
             checkpoint_dir = os.path.join(m5.options.outdir, cpt_name)
             m5.checkpoint(checkpoint_dir)
