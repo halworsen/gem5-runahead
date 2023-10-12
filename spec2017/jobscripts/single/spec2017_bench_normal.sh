@@ -73,6 +73,7 @@ pip freeze
 
 echo
 echo "job: simulate SPEC2017 benchmark at simpoint - $BENCHMARK"
+echo "node: $(hostname)"
 echo "time: $(date)"
 echo "--- start job ---"
 

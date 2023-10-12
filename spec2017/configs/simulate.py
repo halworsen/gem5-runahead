@@ -45,19 +45,43 @@ def sim_fs_normal(root, args, switch_core=True):
 
 def sim_fs_from_checkpoint(root, args):
     '''
-    Simulate on a detailed core starting at a given checkpoint
+    Simulate on a detailed core starting at a given checkpoint. Includes a lot of sanity checking
     '''
-    print('Restoring state from checkpoint. Switching to runahead CPU')
+    print('Restoring state from checkpoint')
+    start_tick = m5.curTick()
+
+    # We have to simulate with the atomic CPU for a very short grace period
+    # If we don't, the runahead CPU model will try to startup AND take over from the simple CPU at once
+    # If that happens in the wrong order (random), things will break
+    grace_period = 100000
+    print(f'Simulating for {grace_period} (grace/initialization period)')
+    exit_event = m5.simulate(grace_period)
+    tick = m5.curTick()
+
+    simstats = m5.stats.gem5stats.get_simstat(root).to_json()
+    insts = int(simstats['system']['processor']['cores0']['core']['exec_context.thread_0']['numInsts']['value'])
+    print(f'Simulated {insts} instructions in {tick - start_tick} ticks (grace period)')
 
     root.system.processor.switch()
 
+    # Simulate for 10M ticks as a sanity checkpoint
+    print('Simulating for 10M cycles (sanity check period)')
+    exit_event = m5.simulate(10000000)
+    tick = m5.curTick()
+    cause = exit_event.getCause()
+
+    simstats = m5.stats.gem5stats.get_simstat(root).to_json()
+    insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
+    print(f'Simulated {insts} instructions in {tick - start_tick} ticks')
+
+    print('Simulating rest of ROI (actual simulation)')
     exit_event = m5.simulate()
     tick = m5.curTick()
     cause = exit_event.getCause()
 
     simstats = m5.stats.gem5stats.get_simstat(root).to_json()
     insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
-    print(f'Simmulated {insts} instructions in {tick} ticks')
+    print(f'Simulated {insts} instructions in {tick - start_tick} ticks')
 
     return (exit_event, tick, cause)
 
