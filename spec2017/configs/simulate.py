@@ -50,38 +50,46 @@ def sim_fs_from_checkpoint(root, args):
     print('Restoring state from checkpoint')
     start_tick = m5.curTick()
 
-    # We have to simulate with the atomic CPU for a very short grace period
+    # We have to simulate with the atomic CPU for a very short period
     # If we don't, the runahead CPU model will try to startup AND take over from the simple CPU at once
-    # If that happens in the wrong order (random), things will break
-    grace_period = 100000
-    print(f'Simulating for {grace_period} (grace/initialization period)')
-    exit_event = m5.simulate(grace_period)
+    # If that happens in the wrong order (random), things will break explicitly
+    restart_period = 1000000
+    print(f'Simulating for {restart_period} (restart/initialization period)')
+    exit_event = m5.simulate(restart_period)
     tick = m5.curTick()
 
     simstats = m5.stats.gem5stats.get_simstat(root).to_json()
     insts = int(simstats['system']['processor']['cores0']['core']['exec_context.thread_0']['numInsts']['value'])
-    print(f'Simulated {insts} instructions in {tick - start_tick} ticks (grace period)')
+    print(f'Simulated {insts} instructions in {tick - start_tick} ticks (init period)')
 
     root.system.processor.switch()
 
-    # Simulate for 10M ticks as a sanity checkpoint
-    print('Simulating for 10M cycles (sanity check period)')
-    exit_event = m5.simulate(10000000)
-    tick = m5.curTick()
-    cause = exit_event.getCause()
+    # But things very often also break silently. In the vast majority of cases, checkpoint restores
+    # leave the detailed CPU model in a stall. Forever. So we simulate in smaller chunks and regularly
+    # check if the CPU has stalled
+    prev_insts = 0
+    prev_tick = tick
+    while True:
+        print('Simulating for 1B ticks')
+        exit_event = m5.simulate(1000000000)
+        tick = m5.curTick()
+        cause = exit_event.getCause()
 
-    simstats = m5.stats.gem5stats.get_simstat(root).to_json()
-    insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
-    print(f'Simulated {insts} instructions in {tick - start_tick} ticks')
+        simstats = m5.stats.gem5stats.get_simstat(root).to_json()
+        insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
+        print(f'Simulated {insts - prev_insts} instructions in {tick - prev_tick} ticks')
 
-    print('Simulating rest of ROI (actual simulation)')
-    exit_event = m5.simulate()
-    tick = m5.curTick()
-    cause = exit_event.getCause()
+        if cause == 'a thread reached the max instruction count':
+            break
 
-    simstats = m5.stats.gem5stats.get_simstat(root).to_json()
-    insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
-    print(f'Simulated {insts} instructions in {tick - start_tick} ticks')
+        if insts == prev_insts:
+            print('The simulation stalled. Try again.')
+            exit(1)
+
+        prev_insts = insts
+
+    print('Finished simulating!')
+    print(f'Simulated a total of {insts} insts in {tick - start_tick} ticks')
 
     return (exit_event, tick, cause)
 
