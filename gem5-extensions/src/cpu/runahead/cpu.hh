@@ -389,16 +389,16 @@ private:
     bool allowOverlappingRunahead;
 
     /** Tracks which threads are in runahead */
-    bool runaheadStatus[MaxThreads];
+    bool runaheadStatus[MaxThreads] = { false };
 
     /**
      * True if the CPU is not currently processing a cycle (i.e. the CPU is between ticks)
      * Mostly for debugging purposes (e.g. setting breakpoints on events that happen off-tick)
     */
-    bool offTick;
+    bool offTick = true;
 
     /** Whether or not the CPU is possibly diverging from correct execution */
-    bool branchDivergence[MaxThreads];
+    bool branchDivergence[MaxThreads] = { false };
 
     /** Debug for saving and validating checkpointed state */
 

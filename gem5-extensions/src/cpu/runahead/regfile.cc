@@ -123,7 +123,7 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
 
     // No registers are poisoned to begin with
     for (int regIdx = 0; regIdx < flat_reg_idx; regIdx++) {
-        poisonedRegs.emplace_back(false);
+        poisonedRegs.push_back(false);
     }
 }
 

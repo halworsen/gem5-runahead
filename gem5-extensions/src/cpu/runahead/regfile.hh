@@ -335,13 +335,17 @@ class PhysRegFile
     void
     regPoisoned(PhysRegIdPtr physReg, bool poisoned)
     {
+        const RegIndex idx = physReg->index();
+
+        const char *poisoning = poisoned ? "Poisoning" : "Curing";
+        DPRINTF(RunaheadIEW, "%s %s register %i", poisoning, physReg->className(), idx);
         // Misc regs are a problem because their flat IDs are 0
         if(physReg->classValue() == MiscRegClass)
             panic("Attempt to %s misc reg %i", poisoned ? "poison" : "cure", physReg->flatIndex());
         if (physReg->classValue() == InvalidRegClass)
             return;
-        const RegIndex idx = physReg->flatIndex();
-        poisonedRegs[idx] = poisoned;
+        const RegIndex flatIdx = physReg->flatIndex();
+        poisonedRegs[flatIdx] = poisoned;
     }
 
     /** Clear poison from all registers in the register file */
