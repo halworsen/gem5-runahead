@@ -173,8 +173,6 @@ class CPU : public BaseCPU
   public:
     /** Constructs a CPU with the given parameters. */
     CPU(const BaseRunaheadCPUParams &params);
-    /** Free resources allocated during the CPU's lifespan */
-    ~CPU();
 
     ProbePointArg<PacketPtr> *ppInstAccessComplete;
     ProbePointArg<std::pair<DynInstPtr, PacketPtr> > *ppDataAccessComplete;
@@ -335,18 +333,6 @@ class CPU : public BaseCPU
 
     void setArchReg(const RegId &reg, RegVal val, ThreadID tid);
     void setArchReg(const RegId &reg, const void *val, ThreadID tid);
-
-    /** Deletes the old free list and copies in a new one */
-    void copyFreeList(UnifiedFreeList newFreeList);
-
-    /** Deletes the old scoreboard and copies in a new one */
-    void copyScoreboard(Scoreboard newScoreboard);
-
-    /** Deletes the old rename map and copies in a new one */
-    void copyRenameMap(ThreadID tid, UnifiedRenameMap newRenameMap);
-
-    /** Deletes the old free list and copies in a new one */
-    void copyCommitRenameMap(ThreadID tid, UnifiedRenameMap newCommitRenameMap);
 
     /** Sets the commit PC state of a specific thread. */
     void pcState(const PCStateBase &new_pc_state, ThreadID tid);
@@ -527,13 +513,13 @@ public:
     PhysRegFile regFile;
 
     /** The free list. */
-    UnifiedFreeList *freeList;
+    UnifiedFreeList freeList;
 
     /** The frontend rename map. */
-    UnifiedRenameMap *renameMap[MaxThreads];
+    UnifiedRenameMap renameMap[MaxThreads];
 
     /** The commit rename map. */
-    UnifiedRenameMap *commitRenameMap[MaxThreads];
+    UnifiedRenameMap commitRenameMap[MaxThreads];
 
     /** The re-order buffer. */
     ROB rob;
@@ -552,7 +538,7 @@ public:
     std::unordered_map<ThreadID, bool> exitingThreads;
 
     /** Integer Register Scoreboard */
-    Scoreboard *scoreboard;
+    Scoreboard scoreboard;
 
     std::vector<TheISA::ISA *> isa;
 

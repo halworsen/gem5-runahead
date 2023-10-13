@@ -334,10 +334,10 @@ Commit::setActiveThreads(std::list<ThreadID> *at_ptr)
 }
 
 void
-Commit::setRenameMap(UnifiedRenameMap *rm_ptr[])
+Commit::setRenameMap(UnifiedRenameMap rm_ptr[])
 {
     for (ThreadID tid = 0; tid < numThreads; tid++)
-        renameMap[tid] = rm_ptr[tid];
+        renameMap[tid] = &rm_ptr[tid];
 }
 
 void Commit::setROB(ROB *rob_ptr) { rob = rob_ptr; }

@@ -99,11 +99,15 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
               params.numPhysVecPredRegs,
               params.numPhysCCRegs,
               params.isa[0]->regClasses()),
+    
+      freeList(name() + ".freelist", &regFile),
 
       rob(this, params),
 
       // TODO? revisit RE cache block size
       runaheadCache(this, params.runaheadCacheSize, 8),
+
+      scoreboard(name() + ".scoreboard", regFile.totalNumPhysRegs()),
 
       isa(numThreads, NULL),
 
@@ -129,11 +133,6 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
     fatal_if(!FullSystem && params.numThreads < params.workload.size(),
             "More workload items (%d) than threads (%d) on CPU %s.",
             params.workload.size(), params.numThreads, name());
-
-    // hack: instead of updating some of the CPU's structures, we copy them over if
-    // we need to change them. this makes things easy, but means its memory must be managed by hand
-    freeList = new UnifiedFreeList(name() + ".freelist", &regFile);
-    scoreboard = new Scoreboard(name() + ".scoreboard", regFile.totalNumPhysRegs());
 
     if (!params.switched_out) {
         _status = Running;
@@ -227,19 +226,14 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
             "Non-zero number of physical CC regs specified, even though\n"
             "    ISA does not use them.");
 
-    rename.setScoreboard(scoreboard);
-    iew.setScoreboard(scoreboard);
+    rename.setScoreboard(&scoreboard);
+    iew.setScoreboard(&scoreboard);
 
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         isa[tid] = dynamic_cast<TheISA::ISA *>(params.isa[tid]);
-
-        // hack: see the free list instantiation above. same thing here.
-        commitRenameMap[tid] = new UnifiedRenameMap();
-        commitRenameMap[tid]->init(regClasses, &regFile, freeList);
-
-        renameMap[tid] = new UnifiedRenameMap();
-        renameMap[tid]->init(regClasses, &regFile, freeList);
+        commitRenameMap[tid].init(regClasses, &regFile, &freeList);
+        renameMap[tid].init(regClasses, &regFile, &freeList);
     }
 
     // Initialize rename map to assign physical registers to the
@@ -252,16 +246,16 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
                 // Note that we can't use the rename() method because we don't
                 // want special treatment for the zero register at this point
                 RegId rid = RegId(type, ridx);
-                PhysRegIdPtr phys_reg = freeList->getReg(type);
-                renameMap[tid]->setEntry(rid, phys_reg);
-                commitRenameMap[tid]->setEntry(rid, phys_reg);
+                PhysRegIdPtr phys_reg = freeList.getReg(type);
+                renameMap[tid].setEntry(rid, phys_reg);
+                commitRenameMap[tid].setEntry(rid, phys_reg);
             }
         }
     }
 
     rename.setRenameMap(renameMap);
     commit.setRenameMap(commitRenameMap);
-    rename.setFreeList(freeList);
+    rename.setFreeList(&freeList);
 
     // Setup the ROB for whichever stages need it.
     commit.setROB(&rob);
@@ -320,16 +314,6 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
     if (!params.switched_out && interrupts.empty()) {
         fatal("RunaheadCPU %s has no interrupt controller.\n"
               "Ensure createInterruptController() is called.\n", name());
-    }
-}
-
-CPU::~CPU()
-{
-    delete freeList;
-    delete scoreboard;
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        delete renameMap[tid];
-        delete commitRenameMap[tid];
     }
 }
 
@@ -833,9 +817,9 @@ CPU::insertThread(ThreadID tid)
     for (auto type = (RegClassType)0; type <= CCRegClass;
             type = (RegClassType)(type + 1)) {
         for (RegIndex idx = 0; idx < regClasses.at(type).numRegs(); idx++) {
-            PhysRegIdPtr phys_reg = freeList->getReg(type);
-            renameMap[tid]->setEntry(RegId(type, idx), phys_reg);
-            scoreboard->setReg(phys_reg);
+            PhysRegIdPtr phys_reg = freeList.getReg(type);
+            renameMap[tid].setEntry(RegId(type, idx), phys_reg);
+            scoreboard.setReg(phys_reg);
         }
     }
 
@@ -1308,88 +1292,36 @@ CPU::setReg(PhysRegIdPtr phys_reg, const void *val)
 RegVal
 CPU::getArchReg(const RegId &reg, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
     return regFile.getReg(phys_reg);
 }
 
 void
 CPU::getArchReg(const RegId &reg, void *val, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
     regFile.getReg(phys_reg, val);
 }
 
 void *
 CPU::getWritableArchReg(const RegId &reg, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
     return regFile.getWritableReg(phys_reg);
 }
 
 void
 CPU::setArchReg(const RegId &reg, RegVal val, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
     regFile.setReg(phys_reg, val);
 }
 
 void
 CPU::setArchReg(const RegId &reg, const void *val, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid]->lookup(reg);
+    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(reg);
     regFile.setReg(phys_reg, val);
-}
-
-void
-CPU::copyFreeList(UnifiedFreeList newFreeList)
-{
-    // Delete the old free list
-    delete freeList;
-    // Copy the new one
-    freeList = new UnifiedFreeList(newFreeList);
-
-    // Repair pointers
-    rename.setFreeList(freeList);
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        renameMap[tid]->setFreeList(freeList);
-        commitRenameMap[tid]->setFreeList(freeList);
-    }
-}
-
-void
-CPU::copyScoreboard(Scoreboard newScoreboard)
-{
-    delete scoreboard;
-    scoreboard = new Scoreboard(newScoreboard);
-
-    rename.setScoreboard(scoreboard);
-    iew.setScoreboard(scoreboard);
-}
-
-void
-CPU::copyRenameMap(ThreadID tid, UnifiedRenameMap newRenameMap)
-{
-    delete renameMap[tid];
-    renameMap[tid] = new UnifiedRenameMap(newRenameMap);
-
-    rename.setRenameMap(renameMap);
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        renameMap[tid]->setFreeList(freeList);
-        commitRenameMap[tid]->setFreeList(freeList);
-    }
-}
-
-void
-CPU::copyCommitRenameMap(ThreadID tid, UnifiedRenameMap newCommitRenameMap)
-{
-    delete commitRenameMap[tid];
-    commitRenameMap[tid] = new UnifiedRenameMap(newCommitRenameMap);
-
-    commit.setRenameMap(commitRenameMap);
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        renameMap[tid]->setFreeList(freeList);
-        commitRenameMap[tid]->setFreeList(freeList);
-    }
 }
 
 const PCStateBase &
@@ -1763,13 +1695,13 @@ CPU::restoreCheckpointState(ThreadID tid)
     rob.archRestoreSanityCheck(tid);
 
     // Reset the free list
-    freeList->reset();
+    freeList.reset();
     // Reset the rename maps
     const BaseISA::RegClasses &regClasses = isa[tid]->regClasses();
     // TODO: this grabs 2 physregs for each arch reg, one for rename and one for commit
     // this essentially nukes a full set of archregs from the phys regfile
-    renameMap[tid]->reset(regClasses);
-    commitRenameMap[tid]->reset(regClasses);
+    renameMap[tid].reset(regClasses);
+    commitRenameMap[tid].reset(regClasses);
 
     // Clear the rename history buffer to prevent any rename undo shenanigans
     // The history buffer should be empty already, but better safe than sorry!
@@ -1782,14 +1714,14 @@ CPU::restoreCheckpointState(ThreadID tid)
         size_t numRegs = regClasses.at(regType).numRegs();
         for (RegIndex archIdx = 0; archIdx < numRegs; ++archIdx) {
             RegId archReg = RegId(regType, archIdx);
-            PhysRegIdPtr physReg = freeList->getReg(regType);
+            PhysRegIdPtr physReg = freeList.getReg(regType);
 
             // Rename maps will agree after runahead exits
-            renameMap[tid]->setEntry(archReg, physReg);
-            commitRenameMap[tid]->setEntry(archReg, physReg);
+            renameMap[tid].setEntry(archReg, physReg);
+            commitRenameMap[tid].setEntry(archReg, physReg);
 
             // Fix the scoreboard while we're at it
-            scoreboard->setReg(physReg);
+            scoreboard.setReg(physReg);
         }
     }
 

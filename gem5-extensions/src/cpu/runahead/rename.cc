@@ -290,10 +290,10 @@ Rename::setActiveThreads(std::list<ThreadID> *at_ptr)
 
 
 void
-Rename::setRenameMap(UnifiedRenameMap *rm_ptr[])
+Rename::setRenameMap(UnifiedRenameMap rm_ptr[])
 {
     for (ThreadID tid = 0; tid < numThreads; tid++)
-        renameMap[tid] = rm_ptr[tid];
+        renameMap[tid] = &rm_ptr[tid];
 }
 
 void
