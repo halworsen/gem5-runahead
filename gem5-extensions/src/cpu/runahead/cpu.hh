@@ -760,7 +760,6 @@ public:
         statistics::Scalar miscRegCured;
 
         enum {
-            StoresToWB,
             ExpectedReturnSoon,
             OverlappingPeriod
         };

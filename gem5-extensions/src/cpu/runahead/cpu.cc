@@ -1564,14 +1564,6 @@ CPU::canEnterRunahead(ThreadID tid, const DynInstPtr &inst)
         return false;
     }
 
-    // Check if there are any outstanding committed stores
-    // If so, we must wait for architectural state to settle or runahead may compromise correctness
-    if (iew.hasStoresToWB(tid)) {
-        DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, IEW has outstanding stores.\n", tid);
-        cpuStats.refusedRunaheadEntries[cpuStats.StoresToWB]++;
-        return false;
-    }
-
     // Check if this period is potentially too short
     Cycles inFlightCycles = ticksToCycles(curTick() - inst->firstIssue);
     assert(inFlightCycles > Cycles(0));
