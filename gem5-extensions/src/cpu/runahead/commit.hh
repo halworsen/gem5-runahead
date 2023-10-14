@@ -348,7 +348,7 @@ class Commit
     ROB *rob;
 
     /** The amount of instructions pseudoretired in the current runahead period */
-    uint64_t instsPseudoretired[MaxThreads];
+    uint64_t instsPseudoretired[MaxThreads] = { 0 };
 
     /** Instructions retired since last runahead exit and before earliest runahead entry */
     int instsBetweenRunahead[MaxThreads] = { 0 };
@@ -397,7 +397,7 @@ class Commit
      * Records whether or not the CPU was in runahead last cycle.
      * Used to determine if certain squashes must be ignored due to being stale.
     */
-    bool wasRunahead[MaxThreads];
+    bool wasRunahead[MaxThreads] = { false };
 
     /** The cause of the runahead period that is about to be exited */
     std::array<DynInstPtr, MaxThreads> runaheadCause;
@@ -545,7 +545,7 @@ class Commit
         /** Number of cycles where the commit bandwidth limit is reached. */
         statistics::Scalar commitEligibleSamples;
 
-        /** Amount of loads that made it to the head of the ROB during commit */
+        /** Amount of cycles with loads at the head of the ROB during commit */
         statistics::Scalar loadsAtROBHead;
         /** Amount of cycles with long-latency loads at the head of the ROB during commit */
         statistics::Scalar lllAtROBHead;

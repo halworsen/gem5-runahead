@@ -201,7 +201,7 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
       ADD_STAT(commitEligibleSamples, statistics::units::Cycle::get(),
                "number cycles where commit BW limit reached"),
       ADD_STAT(loadsAtROBHead, statistics::units::Count::get(),
-               "Total amount of loads that made it to ROB head during commit"),
+               "Amount of cycles with loads at the head of the ROB during commit"),
       ADD_STAT(lllAtROBHead, statistics::units::Cycle::get(),
                "Total amount of cycles with LLLs at the ROB head"),
       ADD_STAT(instsPseudoretired, statistics::units::Count::get(),

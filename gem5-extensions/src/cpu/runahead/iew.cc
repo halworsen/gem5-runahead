@@ -1496,16 +1496,18 @@ IEW::writebackInsts()
                     scoreboard->setReg(destReg);
                 }
 
-                // Mark it as poisoned if the instruction was poisoned
-                if (inst->isPoisoned() && destReg->classValue() != MiscRegClass) {
-                    DPRINTF(RunaheadIEW,
-                            "[sn:%llu] Poisoning destination register %i (%s) (flat:%i)\n",
-                            inst->seqNum, destReg->index(),
-                            destReg->className(), destReg->flatIndex());
-                    cpu->regPoisoned(destReg, true);
-                } else if (destReg->classValue() != MiscRegClass) {
-                    // And "cure" the register if the instruction was valid
-                    cpu->regPoisoned(destReg, false);
+                if (inst->isRunahead()) {
+                    // Mark it as poisoned if the instruction was poisoned
+                    if (inst->isPoisoned() && destReg->classValue() != MiscRegClass) {
+                        DPRINTF(RunaheadIEW,
+                                "[sn:%llu] Poisoning destination register %i (%s) (flat:%i)\n",
+                                inst->seqNum, destReg->index(),
+                                destReg->className(), destReg->flatIndex());
+                        cpu->regPoisoned(destReg, true);
+                    } else if (destReg->classValue() != MiscRegClass) {
+                        // And "cure" the register if the instruction was valid
+                        cpu->regPoisoned(destReg, false);
+                    }
                 }
             }
 

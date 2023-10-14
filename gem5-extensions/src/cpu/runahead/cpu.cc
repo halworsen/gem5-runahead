@@ -518,7 +518,7 @@ CPU::CPUStats::CPUStats(CPU *cpu)
         .flags(statistics::total);
 
     instsRetiredBetweenRunahead
-        .init(0, 2000, 100)
+        .init(0, 1000, 50)
         .flags(statistics::total);
 
     triggerLLLinFlightCycles
@@ -1582,8 +1582,8 @@ CPU::canEnterRunahead(ThreadID tid, const DynInstPtr &inst)
     }
 
     // Check that this period won't overlap with a previous one
-    // I.e. we must have fetched enough insts to catch up with the work runahead did
-    if (fetch.instsBetweenRunahead[tid] < commit.instsPseudoretired[tid]) {
+    // I.e. we must have retired enough insts to catch up with the work runahead did
+    if (commit.instsBetweenRunahead[tid] < commit.instsPseudoretired[tid]) {
         DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, period would overlap.\n", tid);
         cpuStats.refusedRunaheadEntries[cpuStats.OverlappingPeriod]++;
         return false;

@@ -180,7 +180,7 @@ class BaseRunaheadCPU(BaseCPU):
         '"Eager", "FixedDelayed", "DynamicDelayed"'
     )
     runaheadFixedExitLength = Param.Int(
-        100,
+        150,
         'If using the "FixedDelayed" runahead exit policy, '
         'how many cycles to wait until runahead is exited.'
     )

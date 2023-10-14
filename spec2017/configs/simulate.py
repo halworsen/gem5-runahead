@@ -47,13 +47,13 @@ def sim_fs_from_checkpoint(root, args):
     '''
     Simulate on a detailed core starting at a given checkpoint. Includes a lot of sanity checking
     '''
-    print('Restoring state from checkpoint')
     start_tick = m5.curTick()
+    print(f'Restoring state from checkpoint at tick {start_tick}')
 
     # We have to simulate with the atomic CPU for a very short period
     # If we don't, the runahead CPU model will try to startup AND take over from the simple CPU at once
     # If that happens in the wrong order (random), things will break explicitly
-    restart_period = 1000000
+    restart_period = 100
     print(f'Simulating for {restart_period} (restart/initialization period)')
     exit_event = m5.simulate(restart_period)
     tick = m5.curTick()
@@ -69,9 +69,10 @@ def sim_fs_from_checkpoint(root, args):
     # check if the CPU has stalled
     prev_insts = 0
     prev_tick = tick
+    sim_interval = 5000000000
     while True:
-        print('Simulating for 1B ticks')
-        exit_event = m5.simulate(1000000000)
+        print(f'Simulating for {sim_interval} ticks')
+        exit_event = m5.simulate(sim_interval)
         tick = m5.curTick()
         cause = exit_event.getCause()
 
@@ -87,6 +88,7 @@ def sim_fs_from_checkpoint(root, args):
             exit(1)
 
         prev_insts = insts
+        prev_tick = tick
 
     print('Finished simulating!')
     print(f'Simulated a total of {insts} insts in {tick - start_tick} ticks')
