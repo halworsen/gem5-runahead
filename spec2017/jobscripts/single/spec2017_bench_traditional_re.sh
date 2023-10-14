@@ -89,7 +89,7 @@ FSPARAMS=(
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=100"
+    "--lll-latency-threshold=150"
     "--runahead-exit-policy=Eager"
 
     # Cache & memory
@@ -120,7 +120,6 @@ echo "spec2017.py parameters:"
 echo "$PARAMS"
 echo
 
-./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
-    --debug-flags=Runahead,O3CPUAll \
+./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE

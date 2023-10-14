@@ -30,7 +30,7 @@ CHECKPOINTS=(
     ["fotonik3d_s_0"]="cpt_35309091816902_sp-0_interval-473_insts-47300000000_warmup-1000000"
 )
 
-BENCHMARK="gcc_s_2"
+BENCHMARK="gcc_s_1"
 CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
 SPEC2017_DIR="/cluster/home/markuswh/gem5-runahead/spec2017"
 RUNSCRIPT_DIR="$SPEC2017_DIR/runscripts"
@@ -81,6 +81,7 @@ SPEC_PARAMS=(
     "--restore-checkpoint=$SPEC2017_DIR/logs/$BENCHMARK/m5out-gem5-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
+    "--no-runahead"
     "--lll-threshold=3"
     "--rcache-size=2kB"
     "--lll-latency-threshold=100"
@@ -149,8 +150,8 @@ echo "--- start job ---"
 # use schedBreak(<tick>) when connected to target
 GDBSERVER=$HOME/gdb-13.2/gdbserver/gdbserver
 $GDBSERVER localhost:34617 \
-    ./gem5/build/X86/gem5.debug --debug-break=1000 \
-    --debug-flags=Runahead,O3CPUAll \
+    ./gem5/build/X86/gem5.debug --debug-break=17047282257225 \
     --outdir $M5_OUT_DIR \
     $CONFIG_SCRIPT $CONFIG_PARAMS \
     > $SIMOUT_FILE
+    # --debug-flags=Runahead,O3CPUAll \

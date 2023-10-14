@@ -118,6 +118,25 @@ echo "spec2017.py parameters:"
 echo "$PARAMS"
 echo
 
-./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
+./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE
+    # break zone
+    # --debug-start=19291836634469 \
+    # --debug-end=19291836768120 \
+    # start zone
+    # --debug-start=19291726768026 \
+    # --debug-end=19291736768026 \
+    # --debug-flags=O3CPUAll,Runahead \
+
+# LAST_SIMOUT=$(tail -n 1 $SIMOUT_FILE)
+# ATTEMPTS=1
+# while [[ $LAST_SIMOUT == "The simulation got stuck. Try again." ]]; do
+#     ATTEMPTS=$(($ATTEMPTS + 1))
+#     echo
+#     echo "Simulation failed. Retrying (attempt #$ATTEMPTS)."
+#     echo "================================================="
+#     ./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
+#         $SPEC2017_DIR/configs/spec2017.py $PARAMS \
+#         > $SIMOUT_FILE
+# done

@@ -43,6 +43,6 @@ echo "job: test run of gem5 (SE mode) - $SIZE x $SIZE matrix multiplication"
 echo "time: $(date)"
 echo "--- start job ---"
 
-./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
+./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
     $TEST_SCRIPT --size=$SIZE --random=$RANDOM --no-l3 \
     > $SIMOUT_FILE
