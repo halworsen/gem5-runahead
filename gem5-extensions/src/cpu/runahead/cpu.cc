@@ -1659,8 +1659,6 @@ CPU::exitRunahead(ThreadID tid)
     DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to normal.\n", tid);
     inRunahead(tid, false);
 
-    // Impossible to have re-entered runahead without fetching new insts
-    assert(fetch.instsBetweenRunahead[tid] > 0);
     fetch.instsBetweenRunahead[tid] = 0;
     commit.instsBetweenRunahead[tid] = 0;
 }
