@@ -338,7 +338,7 @@ class PhysRegFile
         const RegIndex idx = physReg->index();
 
         const char *poisoning = poisoned ? "Poisoning" : "Curing";
-        DPRINTF(RunaheadIEW, "%s %s register %i", poisoning, physReg->className(), idx);
+        DPRINTF(RunaheadIEW, "%s %s register %i\n", poisoning, physReg->className(), idx);
         // Misc regs are a problem because their flat IDs are 0
         if(physReg->classValue() == MiscRegClass)
             panic("Attempt to %s misc reg %i", poisoned ? "poison" : "cure", physReg->flatIndex());

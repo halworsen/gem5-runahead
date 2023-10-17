@@ -1287,8 +1287,10 @@ InstructionQueue::doSquash(ThreadID tid)
                     // loads that became ready but stalled on a
                     // blocked cache are alreayd removed from
                     // nonSpecInsts, and have not faulted
+                    // Runahead insts may show up here because a runahead exit squash is not tied to
+                    // an instruction execution or fault handling at commit
                     assert(squashed_inst->getFault() != NoFault ||
-                           squashed_inst->isMemRef());
+                           squashed_inst->isMemRef() || squashed_inst->isRunahead());
                 } else {
 
                     (*ns_inst_it).second = NULL;
