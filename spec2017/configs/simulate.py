@@ -64,13 +64,23 @@ def sim_fs_from_checkpoint(root, args):
 
     root.system.processor.switch()
 
-    # But things very often also break silently. In the vast majority of cases, checkpoint restores
-    # leave the detailed CPU model in a stall. Forever. So we simulate in smaller chunks and regularly
+    # But things can also break silently. In some cases, checkpoint restores leave the
+    # detailed CPU model in a stall. Forever. So we simulate in smaller chunks and regularly
     # check if the CPU has stalled
     prev_insts = 0
     prev_tick = tick
-    sim_interval = 5000000000
+    # The last sim interval is used for any sim periods beyond the length of this list
+    sim_intervals = [5000000000]
+    it = sim_intervals.__iter__()
     while True:
+        try:
+            sim_interval = next(it)
+        except StopIteration:
+            sim_interval = sim_intervals[-1]
+
+        if sim_interval <= 0:
+            break
+
         print(f'Simulating for {sim_interval} ticks')
         exit_event = m5.simulate(sim_interval)
         tick = m5.curTick()
@@ -78,7 +88,7 @@ def sim_fs_from_checkpoint(root, args):
 
         simstats = m5.stats.gem5stats.get_simstat(root).to_json()
         insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
-        print(f'Simulated {insts - prev_insts} instructions in {tick - prev_tick} ticks')
+        print(f'Simulated {insts - prev_insts} instructions in {tick - prev_tick} ticks - {cause}')
 
         if cause == 'a thread reached the max instruction count':
             break
