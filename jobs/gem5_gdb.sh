@@ -154,4 +154,7 @@ $GDBSERVER localhost:34617 \
     --outdir $M5_OUT_DIR \
     $CONFIG_SCRIPT $CONFIG_PARAMS \
     > $SIMOUT_FILE
-    # --debug-flags=Runahead,O3CPUAll \
+
+# Move simout and SLURM output
+mv $SIMOUT_FILE $M5_OUT_DIR
+mv $SLURM_LOG_FILE $M5_OUT_DIR

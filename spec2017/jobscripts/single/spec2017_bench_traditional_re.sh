@@ -1,8 +1,9 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-traditional-re"
+#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-50"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
+#SBATCH --exclude=idun-02-45,idun-02-49
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
@@ -15,6 +16,7 @@
 #
 
 declare -A CHECKPOINTS
+
 CHECKPOINTS=(
     ["perlbench_s_0"]="cpt_26723810289983_sp-1_interval-369_insts-36900000000_warmup-1000000"
     ["perlbench_s_1"]="cpt_33681194937967_sp-1_interval-462_insts-46200000000_warmup-1000000"
@@ -89,7 +91,7 @@ FSPARAMS=(
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=150"
+    "--lll-latency-threshold=50"
     "--runahead-exit-policy=Eager"
 
     # Cache & memory
@@ -123,3 +125,19 @@ echo
 ./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE
+
+# Parse simulation statistics to JSON
+echo "--- simulation end ---"
+echo "parsing simulation statistics"
+
+STAT_PARSE_SCRIPT=/cluster/home/markuswh/gem5-runahead/scripts/stats/statdump.py
+PARSED_STATS_NAME=gem5stats.json
+
+python $STAT_PARSE_SCRIPT \
+    --format json \
+    --out $M5_OUT_DIR/$PARSED_STATS_NAME \
+    $M5_OUT_DIR/stats.txt
+
+# Move simout and SLURM output
+mv $SIMOUT_FILE $M5_OUT_DIR
+mv $SLURM_LOG_FILE $M5_OUT_DIR
