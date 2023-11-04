@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-50"
+#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-150"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -18,19 +18,19 @@
 #
 
 ALL_BENCHMARKS=(
-    "perlbench_s_0" "perlbench_s_1" "perlbench_s_2"
-    "gcc_s_1" "gcc_s_2"
-    "mcf_s_0"
     "cactuBSSN_s_0"
-    "omnetpp_s_0"
-    "wrf_s_0"
-    "xalancbmk_s_0"
-    "x264_s_0"
-    "x264_s_2"
-    "imagick_s_0"
-    "nab_s_0"
     "exchange2_s_0"
     "fotonik3d_s_0"
+    "gcc_s_1" "gcc_s_2"
+    "imagick_s_0"
+    "mcf_s_0"
+    "nab_s_0"
+    "omnetpp_s_0"
+    "perlbench_s_0" "perlbench_s_1" "perlbench_s_2"
+    "wrf_s_0"
+    "x264_s_0"
+    "x264_s_2"
+    "xalancbmk_s_0"
 )
 
 declare -A CHECKPOINTS
@@ -109,7 +109,7 @@ FSPARAMS=(
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=50"
+    "--lll-latency-threshold=150"
     "--runahead-exit-policy=Eager"
 
     # Cache & memory
