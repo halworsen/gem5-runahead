@@ -438,6 +438,7 @@ void
 IEW::squash(ThreadID tid)
 {
     DPRINTF(IEW, "[tid:%i] Squashing all instructions.\n", tid);
+    squashedSeqNum[tid] = fromCommit->commitInfo[tid].doneSeqNum;
 
     // Tell the IQ to start squashing.
     instQueue.squash(tid);
@@ -956,10 +957,14 @@ IEW::dispatchInsts(ThreadID tid)
         // them as issued so the IQ doesn't reprocess them.
 
         // Check for squashed instructions.
-        if (inst->isSquashed()) {
+        if (inst->isSquashed() ||
+            (dispatchStatus[tid] == Squashing && inst->seqNum > squashedSeqNum[tid])) {
             DPRINTF(IEW, "[tid:%i] Issue: Squashed instruction encountered, "
                     "not adding to IQ.\n", tid);
             ++iewStats.dispSquashedInsts;
+
+            if (!inst->isSquashed())
+                inst->setSquashed();
 
             insts_to_dispatch.pop();
 
@@ -1213,10 +1218,16 @@ IEW::executeInsts()
         ppExecute->notify(inst);
 
         // Check if the instruction is squashed; if so then skip it
-        if (inst->isSquashed()) {
+        ThreadID tid = inst->threadNumber;
+        if (inst->isSquashed() ||
+            (dispatchStatus[tid] == Squashing && inst->seqNum > squashedSeqNum[tid])) {
             DPRINTF(IEW, "Execute: Instruction was squashed. PC: %s, [tid:%i]"
                          " [sn:%llu]\n", inst->pcState(), inst->threadNumber,
                          inst->seqNum);
+
+            // ROB didn't get to it yet, but by execute it has to be squashed
+            if (!inst->isSquashed())
+                inst->setSquashed();
 
             // Consider this instruction executed so that commit can go
             // ahead and retire the instruction.
@@ -1363,8 +1374,6 @@ IEW::executeInsts()
         // This probably needs to prioritize the redirects if a different
         // scheduler is used.  Currently the scheduler schedules the oldest
         // instruction first, so the branch resolution order will be correct.
-        ThreadID tid = inst->threadNumber;
-
         if (!fetchRedirect[tid] ||
             !toCommit->squash[tid] ||
             toCommit->squashedSeqNum[tid] > inst->seqNum) {

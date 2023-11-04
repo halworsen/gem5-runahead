@@ -244,6 +244,12 @@ class IEW
     void squashDueToRunahead(const DynInstPtr &inst, ThreadID tid);
 
   private:
+    /**
+     * The sequence number of the instruction that was squashed last.
+     * Any instructions younger than this will be ignored by execute.
+     */
+    InstSeqNum squashedSeqNum[MaxThreads] = { 0 };
+
     /** Sends commit proper information for a squash due to a branch
      * mispredict.
      */
