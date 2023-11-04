@@ -191,14 +191,8 @@ def main(opts: argparse.Namespace) -> None:
                     _section_data[key] = _data[key]
                     break
 
-    exts = {'pickle': 'pkl', 'json': 'json'}
-    out_path = f'{opts.out}.{exts[opts.format]}'
-    if opts.format == 'pickle':
-        with open(out_path, 'wb+') as file:
-            pickle.dump(stats_data, file)
-    elif opts.format == 'json':
-        with open(out_path, 'w+') as file:
-            json.dump(stats_data, file)
+    with open(opts.out, 'w+') as file:
+        json.dump(stats_data, file)
 
 
 parser = argparse.ArgumentParser()
