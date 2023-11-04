@@ -28,6 +28,8 @@ namespace runahead
 class RunaheadCache
 {
 private:
+    const std::string _name;
+
     struct CacheBlock
     {
         uint8_t *data;
@@ -85,7 +87,9 @@ private:
 
 public:
     /** Sizes should be in bytes */
-    RunaheadCache(statistics::Group *statsParent, uint64_t size, uint8_t blockSize);
+    RunaheadCache(const std::string &name, statistics::Group *statsParent, uint64_t size, uint8_t blockSize);
+
+    std::string name() const { return _name; }
 
     ~RunaheadCache();
 

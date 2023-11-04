@@ -26,6 +26,12 @@ ArchCheckpoint::ArchCheckpoint(CPU *cpu, const BaseRunaheadCPUParams &params) :
     }
 }
 
+std::string
+ArchCheckpoint::name() const
+{
+     return cpu->name() + ".arch_checkpoint";
+}
+
 void
 ArchCheckpoint::fullSave(ThreadID tid)
 {
@@ -87,7 +93,7 @@ ArchCheckpoint::restore(ThreadID tid)
                 // This is mostly just to reduce the amount of debug prints
                 if (curVal != checkpointVal) {
                     DPRINTF(RunaheadCheckpoint,
-                        "[tid:%i] Restoring %s arch reg %i to value %s (was %s)\n",
+                        "[tid:%i] Restoring %s arch reg %i to value %#x (was %#x)\n",
                         tid, reg.className(), reg.index(),
                         checkpointVal, curVal);
                     cpu->setArchReg(reg, checkpointVal, tid);
@@ -95,7 +101,7 @@ ArchCheckpoint::restore(ThreadID tid)
             } else {
                 curVal = cpu->readMiscReg(archIdx, tid);
                 if (curVal != checkpointVal) { // && archIdx == TheISA::misc_reg::Rflags
-                    DPRINTF(RunaheadCheckpoint, "[tid:%i] Restoring misc reg %i to value %llu (was %llu)\n",
+                    DPRINTF(RunaheadCheckpoint, "[tid:%i] Restoring misc reg %i to value %#x (was %#x)\n",
                             tid, archIdx, checkpointVal, curVal);
                     cpu->setMiscReg(archIdx, checkpointVal, tid);
                 }

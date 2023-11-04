@@ -47,6 +47,8 @@ private:
 public:
     ArchCheckpoint(CPU *cpu, const BaseRunaheadCPUParams &params);
 
+    std::string name() const;
+
     /** Restore the architectural state of the CPU */
     void restore(ThreadID tid);
 

@@ -104,8 +104,8 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
 
       rob(this, params),
 
-      // TODO? revisit RE cache block size
-      runaheadCache(this, params.runaheadCacheSize, 8),
+      // TODO? revisit RE cache block size (parametrize)
+      runaheadCache(name() + ".rcache", this, params.runaheadCacheSize, 8),
 
       scoreboard(name() + ".scoreboard", regFile.totalNumPhysRegs()),
 
@@ -1601,7 +1601,10 @@ CPU::enterRunahead(ThreadID tid)
     // DEBUG - dump before runahead starts
     //dumpArchRegs(tid);
     // Also debug, save regs in a simple way to make sure they're the same on exit
+#if !defined(NDEBUG)
     saveStateForValidation(tid);
+#endif
+
     archStateCheckpoint.fullSave(tid);
 
     DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to runahead.\n", tid);
@@ -1724,7 +1727,9 @@ CPU::restoreCheckpointState(ThreadID tid)
     // DEBUG - dump arch regs after checkpoint restore
     //dumpArchRegs(tid);
     // Also debug, validate that all checkpoints were successfully restored
+#if !defined(NDEBUG)
     checkStateForValidation(tid);
+#endif
 }
 
 bool

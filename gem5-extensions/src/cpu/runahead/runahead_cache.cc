@@ -12,8 +12,9 @@ namespace runahead
 
 using LSQRequest = LSQ::LSQRequest;
 
-RunaheadCache::RunaheadCache(statistics::Group *statsParent, uint64_t size, uint8_t blockSize)
-    : size(size), blockSize(blockSize),
+RunaheadCache::RunaheadCache(const std::string &name, statistics::Group *statsParent, uint64_t size, uint8_t blockSize)
+    : _name(name),
+    size(size), blockSize(blockSize),
     numBlocks(size / blockSize),
     indexShift(ceilLog2(blockSize)),
     // instead of pow2
