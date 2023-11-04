@@ -439,6 +439,7 @@ IEW::squash(ThreadID tid)
 {
     DPRINTF(IEW, "[tid:%i] Squashing all instructions.\n", tid);
     squashedSeqNum[tid] = fromCommit->commitInfo[tid].doneSeqNum;
+    squashTailSeqNum[tid] = fromCommit->commitInfo[tid].squashTail;
 
     // Tell the IQ to start squashing.
     instQueue.squash(tid);
@@ -780,7 +781,6 @@ IEW::checkSignalsAndUpdate(ThreadID tid)
 
     if (checkStall(tid)) {
         block(tid);
-        dispatchStatus[tid] = Blocked;
         return;
     }
 
@@ -958,7 +958,7 @@ IEW::dispatchInsts(ThreadID tid)
 
         // Check for squashed instructions.
         if (inst->isSquashed() ||
-            (dispatchStatus[tid] == Squashing && inst->seqNum > squashedSeqNum[tid])) {
+            (inst->seqNum > squashedSeqNum[tid] && inst->seqNum <= squashTailSeqNum[tid])) {
             DPRINTF(IEW, "[tid:%i] Issue: Squashed instruction encountered, "
                     "not adding to IQ.\n", tid);
             ++iewStats.dispSquashedInsts;
@@ -1205,10 +1205,11 @@ IEW::executeInsts()
         DPRINTF(IEW, "Execute: Executing instructions from IQ.\n");
 
         DynInstPtr inst = instQueue.getInstToExecute();
+        ThreadID tid = inst->threadNumber;
 
         DPRINTF(IEW, "Execute: Processing PC %s, [tid:%i] [sn:%llu].\n",
                 inst->pcState(), inst->threadNumber,inst->seqNum);
-        
+
         if (inst->isRunahead())
             DPRINTF(RunaheadIEW, "Execute: [sn:%llu] Instruction is runahead.\n",
                    inst->seqNum);
@@ -1218,9 +1219,8 @@ IEW::executeInsts()
         ppExecute->notify(inst);
 
         // Check if the instruction is squashed; if so then skip it
-        ThreadID tid = inst->threadNumber;
         if (inst->isSquashed() ||
-            (dispatchStatus[tid] == Squashing && inst->seqNum > squashedSeqNum[tid])) {
+            (inst->seqNum > squashedSeqNum[tid] && inst->seqNum <= squashTailSeqNum[tid])) {
             DPRINTF(IEW, "Execute: Instruction was squashed. PC: %s, [tid:%i]"
                          " [sn:%llu]\n", inst->pcState(), inst->threadNumber,
                          inst->seqNum);

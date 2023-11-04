@@ -192,6 +192,9 @@ struct TimeStruct
         /// retired or squashed sequence number.
         InstSeqNum doneSeqNum; // *F, I
 
+        // The instruction we are squashing *from*
+        InstSeqNum squashTail; // *I
+
         /// Tell Rename how many free entries it has in the ROB
         unsigned freeROBEntries; // *R
 

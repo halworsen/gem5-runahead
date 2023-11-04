@@ -246,9 +246,15 @@ class IEW
   private:
     /**
      * The sequence number of the instruction that was squashed last.
-     * Any instructions younger than this will be ignored by execute.
      */
     InstSeqNum squashedSeqNum[MaxThreads] = { 0 };
+
+    /**
+     * The sequence number of the youngest instruction in the ROB when squash began.
+     * Together with squashedSeqNum, these define the instruction range of the latest squash.
+     * Any instructions older than this but younger than squashedSeqNum are ignored by execute.
+    */
+   InstSeqNum squashTailSeqNum[MaxThreads] = { 0 };
 
     /** Sends commit proper information for a squash due to a branch
      * mispredict.

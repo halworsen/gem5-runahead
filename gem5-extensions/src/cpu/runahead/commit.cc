@@ -610,6 +610,7 @@ Commit::squashAll(ThreadID tid)
 
     // Send back the sequence number of the squashed instruction.
     toIEW->commitInfo[tid].doneSeqNum = squashed_inst;
+    toIEW->commitInfo[tid].squashTail = rob->isEmpty(tid) ? squashed_inst : rob->readTailInst(tid)->seqNum;
 
     // Send back the squash signal to tell stages that they should
     // squash.
@@ -700,8 +701,12 @@ Commit::squashFromRunaheadExit(ThreadID tid)
     const DynInstPtr &lll = runaheadCause[tid];
     InstSeqNum squashedSeqNum = lll->seqNum - 1;
 
+    DPRINTF(RunaheadCommit, "[tid:%i] [sn:%llu] Performing runahead exit squash\n",
+            tid, lll->seqNum);
+
     youngestSeqNum[tid] = squashedSeqNum;
     toIEW->commitInfo[tid].doneSeqNum = squashedSeqNum;
+    toIEW->commitInfo[tid].squashTail = rob->isEmpty(tid) ? squashedSeqNum : rob->readTailInst(tid)->seqNum;
 
     // Start squashing in the ROB
     commitStatus[tid] = ROBSquashing;
@@ -986,6 +991,7 @@ Commit::commit()
             changedROBNumEntries[tid] = true;
 
             toIEW->commitInfo[tid].doneSeqNum = squashed_inst;
+            toIEW->commitInfo[tid].squashTail = rob->isEmpty(tid) ? squashed_inst : rob->readTailInst(tid)->seqNum;
 
             toIEW->commitInfo[tid].squash = true;
 
@@ -1221,6 +1227,7 @@ Commit::commitInsts()
 
                 // Set the doneSeqNum to the youngest committed instruction.
                 toIEW->commitInfo[tid].doneSeqNum = head_inst->seqNum;
+                toIEW->commitInfo[tid].squashTail = rob->isEmpty(tid) ? head_inst->seqNum : rob->readTailInst(tid)->seqNum;
 
                 if (tid == 0)
                     canHandleInterrupts = !head_inst->isDelayedCommit();
@@ -1235,9 +1242,9 @@ Commit::commitInsts()
                 head_inst->updateMiscRegs();
 
                 // Incremental update of architectural state checkpoint
-                if (!head_inst->isRunahead()) {
-                    cpu->updateArchCheckpoint(tid, head_inst);
-                }
+                // if (!head_inst->isRunahead()) {
+                //     cpu->updateArchCheckpoint(tid, head_inst);
+                // }
 
                 // Check instruction execution if it successfully commits and
                 // is not carrying a fault.
@@ -1427,7 +1434,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         thread[tid]->noSquashFromTC = true;
 
         /**
-         * All faults are ignored in runahead. The problem isn't "architecturally real",
+         * All runahead faults are ignored. The problem isn't "architecturally real",
          * and if it was a syscall, we definitely don't want it to execute speculatively.
          * The trap squash will still happen, but the trap itself does not execute
         */ 
