@@ -1620,7 +1620,7 @@ CPU::canEnterRunahead(ThreadID tid, const DynInstPtr &inst)
 
     // Check that this period won't overlap with a previous one
     // I.e. we must have retired enough insts to catch up with the work runahead did
-    if (commit.instsBetweenRunahead[tid] < commit.instsPseudoretired[tid]) {
+    if (!allowOverlappingRunahead && (commit.instsBetweenRunahead[tid] < commit.instsPseudoretired[tid])) {
         DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, period would overlap.\n", tid);
         cpuStats.refusedRunaheadEntries[cpuStats.OverlappingPeriod]++;
         return false;
