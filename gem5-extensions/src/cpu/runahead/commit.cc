@@ -717,7 +717,8 @@ Commit::squashFromRunaheadExit(ThreadID tid)
     toIEW->commitInfo[tid].mispredictInst = NULL;
     toIEW->commitInfo[tid].squashInst = rob->findInst(tid, squashedSeqNum);
 
-    set(toIEW->commitInfo[tid].pc, lll->pcState());
+    set(pc[tid], lll->pcState());
+    set(toIEW->commitInfo[tid].pc, pc[tid]);
 
     // Reset any in-flight traps
     trapInFlight[tid] = false;
