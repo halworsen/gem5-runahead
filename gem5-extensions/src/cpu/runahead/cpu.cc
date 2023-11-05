@@ -336,6 +336,10 @@ CPU::regProbePoints()
 
 CPU::CPUStats::CPUStats(CPU *cpu)
     : statistics::Group(cpu),
+      ADD_STAT(runaheadCycles, statistics::units::Cycle::get(),
+               "Total number of cycles spent in runahead"),
+      ADD_STAT(realCycles, statistics::units::Cycle::get(),
+               "Total number of cycles spent outside of runahead"),
       ADD_STAT(timesIdled, statistics::units::Count::get(),
                "Number of times that the entire CPU went into an idle state "
                "and unscheduled itself"),
@@ -346,6 +350,8 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "Total number of cycles that CPU has spent quiesced or waiting "
                "for an interrupt"),
       ADD_STAT(committedInsts, statistics::units::Count::get(),
+               "Number of Instructions Simulated"),
+      ADD_STAT(pseudoRetiredInsts, statistics::units::Count::get(),
                "Number of Instructions Simulated"),
       ADD_STAT(committedOps, statistics::units::Count::get(),
                "Number of Ops (including micro ops) Simulated"),
@@ -361,6 +367,18 @@ CPU::CPUStats::CPUStats(CPU *cpu)
       ADD_STAT(totalIpc, statistics::units::Rate<
                     statistics::units::Count, statistics::units::Cycle>::get(),
                "IPC: Total IPC of All Threads"),
+      ADD_STAT(runaheadCpi, statistics::units::Rate<
+                    statistics::units::Cycle, statistics::units::Count>::get(),
+               "CPI in runahead mode"),
+      ADD_STAT(runaheadIpc, statistics::units::Rate<
+                    statistics::units::Count, statistics::units::Cycle>::get(),
+               "IPC in runahead mode"),
+      ADD_STAT(realCpi, statistics::units::Rate<
+                    statistics::units::Cycle, statistics::units::Count>::get(),
+               "CPI outside of runahead mode"),
+      ADD_STAT(realIpc, statistics::units::Rate<
+                    statistics::units::Count, statistics::units::Cycle>::get(),
+               "IPC outside of runahead mode"),
       ADD_STAT(intRegfileReads, statistics::units::Count::get(),
                "Number of integer regfile reads"),
       ADD_STAT(intRegfileWrites, statistics::units::Count::get(),
@@ -387,8 +405,8 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "number of misc regfile writes"),
       ADD_STAT(runaheadPeriods, statistics::units::Count::get(),
                "Amount of times runahead was entered"),
-      ADD_STAT(runaheadCycles, statistics::units::Cycle::get(),
-               "Amount of cycles spent in runahead mode"),
+      ADD_STAT(runaheadCycleDist, statistics::units::Cycle::get(),
+               "Distribution of amount of cycles spent in runahead mode"),
       ADD_STAT(refusedRunaheadEntries, statistics::units::Count::get(),
                "Amount of times the CPU refused to enter into runahead"),
       ADD_STAT(instsPseudoRetiredPerPeriod, statistics::units::Count::get(),
@@ -425,6 +443,9 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "Amount of times a misc register's poison was reset in runahead")
 {
     // Register any of the RunaheadCPU's stats here.
+    runaheadCycles.prereq(runaheadCycles);
+    realCycles.prereq(runaheadCycles);
+
     timesIdled
         .prereq(timesIdled);
 
@@ -439,6 +460,10 @@ CPU::CPUStats::CPUStats(CPU *cpu)
     // Should probably be in Base CPU but need templated
     // MaxThreads so put in here instead
     committedInsts
+        .init(cpu->numThreads)
+        .flags(statistics::total);
+
+    pseudoRetiredInsts
         .init(cpu->numThreads)
         .flags(statistics::total);
 
@@ -461,6 +486,16 @@ CPU::CPUStats::CPUStats(CPU *cpu)
     totalIpc
         .precision(6);
     totalIpc = sum(committedInsts) / cpu->baseStats.numCycles;
+
+    realCpi.precision(6);
+    realCpi = realCycles / committedInsts;
+    realIpc.precision(6);
+    realIpc = committedInsts / realCycles;
+
+    runaheadCpi.precision(6);
+    runaheadCpi = runaheadCycles / pseudoRetiredInsts;
+    runaheadIpc.precision(6);
+    runaheadIpc = pseudoRetiredInsts / runaheadCycles;
 
     intRegfileReads
         .prereq(intRegfileReads);
@@ -501,7 +536,7 @@ CPU::CPUStats::CPUStats(CPU *cpu)
     runaheadPeriods
         .prereq(runaheadPeriods);
 
-    runaheadCycles
+    runaheadCycleDist
         .init(0, 1000, 50)
         .flags(statistics::total);
 
@@ -572,6 +607,11 @@ CPU::tick()
     assert(drainState() != DrainState::Drained);
 
     ++baseStats.numCycles;
+    // todo: per thread
+    if (inRunahead(0))
+        ++cpuStats.runaheadCycles;
+    else
+        ++cpuStats.realCycles;
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
     
 //    activity = false;
@@ -1356,9 +1396,14 @@ CPU::instDone(ThreadID tid, const DynInstPtr &inst)
 {
     // Keep an instruction count.
     if (!inst->isMicroop() || inst->isLastMicroop()) {
-        thread[tid]->numInst++;
-        thread[tid]->threadStats.numInsts++;
-        cpuStats.committedInsts[tid]++;
+        // Runahead is speculative, so it doesn't count towards the inst count
+        if (!inst->isRunahead()) {
+            thread[tid]->numInst++;
+            thread[tid]->threadStats.numInsts++;
+            cpuStats.committedInsts[tid]++;
+        } else {
+            cpuStats.pseudoRetiredInsts[tid]++;
+        }
 
         // Check for instruction-count-based events.
         thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
@@ -1653,7 +1698,7 @@ CPU::exitRunahead(ThreadID tid)
     DPRINTF(RunaheadCPU, "[tid:%i] Exiting runahead after %llu cycles. Instructions pseudoretired: %i\n",
                          tid, timeInRunahead, commit.instsPseudoretired[tid]);
 
-    cpuStats.runaheadCycles.sample(timeInRunahead);
+    cpuStats.runaheadCycleDist.sample(timeInRunahead);
     cpuStats.instsPseudoRetiredPerPeriod.sample(commit.instsPseudoretired[tid]);
     cpuStats.instsFetchedBetweenRunahead.sample(fetch.instsBetweenRunahead[tid]);
     cpuStats.instsRetiredBetweenRunahead.sample(commit.instsBetweenRunahead[tid]);

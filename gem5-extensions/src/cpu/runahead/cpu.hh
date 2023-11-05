@@ -677,6 +677,11 @@ public:
     {
         CPUStats(CPU *cpu);
 
+        /** Number of cycles spent in runahead */
+        statistics::Scalar runaheadCycles;
+        /** Number of cycles spent outside of runahead */
+        statistics::Scalar realCycles;
+
         /** Stat for total number of times the CPU is descheduled. */
         statistics::Scalar timesIdled;
         /** Stat for total number of cycles the CPU spends descheduled. */
@@ -686,6 +691,8 @@ public:
         statistics::Scalar quiesceCycles;
         /** Stat for the number of committed instructions per thread. */
         statistics::Vector committedInsts;
+        /** Stat for the number of pseudoretired instructions per thread. */
+        statistics::Vector pseudoRetiredInsts;
         /** Stat for the number of committed ops (including micro ops) per
          *  thread. */
         statistics::Vector committedOps;
@@ -697,6 +704,14 @@ public:
         statistics::Formula ipc;
         /** Stat for the total IPC. */
         statistics::Formula totalIpc;
+        /** CPI per thread in runahead */
+        statistics::Formula runaheadCpi;
+        /** IPC per thread in runahead */
+        statistics::Formula runaheadIpc;
+        /** CPI per thread outside of runahead */
+        statistics::Formula realCpi;
+        /** IPC per thread outside of runahead */
+        statistics::Formula realIpc;
 
         //number of integer register file accesses
         statistics::Scalar intRegfileReads;
@@ -722,7 +737,7 @@ public:
         // Amount of times runahead was entered
         statistics::Scalar runaheadPeriods;
         // Distribution of amount of cycles spent in runahead periods
-        statistics::Distribution runaheadCycles;
+        statistics::Distribution runaheadCycleDist;
         // Amount of times the CPU refused to enter into runahead
         statistics::Vector refusedRunaheadEntries;
         // Histogram of amount of instructions pseudoretired by runahead execution
