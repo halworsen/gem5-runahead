@@ -51,8 +51,8 @@
 #include "config/the_isa.hh"
 #include "cpu/runahead/comm.hh"
 #include "cpu/regfile.hh"
-#include "debug/IEW.hh"
-#include "debug/RunaheadIEW.hh"
+#include "debug/RegFile.hh"
+#include "debug/RunaheadRegFile.hh"
 
 namespace gem5
 {
@@ -176,22 +176,22 @@ class PhysRegFile
         switch (type) {
           case IntRegClass:
             val = intRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to int register %i, has%s data %#x\n",
+            DPRINTF(RegFile, "RegFile: Access to int register %i, has%s data %#x\n",
                     idx, poisoned, val);
             return val;
           case FloatRegClass:
             val = floatRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to float register %i, has%s data %#x\n",
+            DPRINTF(RegFile, "RegFile: Access to float register %i, has%s data %#x\n",
                     idx, poisoned, val);
             return val;
           case VecElemClass:
             val = vectorElemRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to vector element register %i, has%s data %#x\n",
+            DPRINTF(RegFile, "RegFile: Access to vector element register %i, has%s data %#x\n",
                     idx, poisoned, val);
             return val;
           case CCRegClass:
             val = ccRegFile.reg(idx);
-            DPRINTF(IEW, "RegFile: Access to cc register %i, has%s data %#x\n",
+            DPRINTF(RegFile, "RegFile: Access to cc register %i, has%s data %#x\n",
                     idx, poisoned, val);
             return val;
           default:
@@ -214,7 +214,7 @@ class PhysRegFile
             break;
           case VecRegClass:
             vectorRegFile.get(idx, val);
-            DPRINTF(IEW, "RegFile: Access to vector register %i, has data %s\n",
+            DPRINTF(RegFile, "RegFile: Access to vector register %i, has data %s\n",
                     idx,
                     vectorRegFile.regClass.valString(val));
             break;
@@ -223,7 +223,7 @@ class PhysRegFile
             break;
           case VecPredRegClass:
             vecPredRegFile.get(idx, val);
-            DPRINTF(IEW, "RegFile: Access to predicate register %i, has data %s\n",
+            DPRINTF(RegFile, "RegFile: Access to predicate register %i, has data %s\n",
                     idx,
                     vecPredRegFile.regClass.valString(val));
             break;
@@ -262,22 +262,22 @@ class PhysRegFile
             break;
           case IntRegClass:
             intRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting int register %i to %#x\n",
+            DPRINTF(RegFile, "RegFile: Setting int register %i to %#x\n",
                     idx, val);
             break;
           case FloatRegClass:
             floatRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting float register %i to %#x\n",
+            DPRINTF(RegFile, "RegFile: Setting float register %i to %#x\n",
                     idx, val);
             break;
           case VecElemClass:
             vectorElemRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting vector element register %i to %#x\n",
+            DPRINTF(RegFile, "RegFile: Setting vector element register %i to %#x\n",
                     idx, val);
             break;
           case CCRegClass:
             ccRegFile.reg(idx) = val;
-            DPRINTF(IEW, "RegFile: Setting cc register %i to %#x\n",
+            DPRINTF(RegFile, "RegFile: Setting cc register %i to %#x\n",
                     idx, val);
             break;
           default:
@@ -299,7 +299,7 @@ class PhysRegFile
             setReg(phys_reg, *(RegVal *)val);
             break;
           case VecRegClass:
-            DPRINTF(IEW, "RegFile: Setting vector register %i to %s\n",
+            DPRINTF(RegFile, "RegFile: Setting vector register %i to %s\n",
                     idx,
                     vectorRegFile.regClass.valString(val));
             vectorRegFile.set(idx, val);
@@ -308,7 +308,7 @@ class PhysRegFile
             setReg(phys_reg, *(RegVal *)val);
             break;
           case VecPredRegClass:
-            DPRINTF(IEW, "RegFile: Setting predicate register %i to %s\n",
+            DPRINTF(RegFile, "RegFile: Setting predicate register %i to %s\n",
                     idx,
                     vectorRegFile.regClass.valString(val));
             vecPredRegFile.set(idx, val);
@@ -338,7 +338,7 @@ class PhysRegFile
         const RegIndex idx = physReg->index();
 
         const char *poisoning = poisoned ? "Poisoning" : "Curing";
-        DPRINTF(RunaheadIEW, "%s %s register %i\n", poisoning, physReg->className(), idx);
+        DPRINTF(RunaheadRegFile, "%s %s register %i\n", poisoning, physReg->className(), idx);
         // Misc regs are a problem because their flat IDs are 0
         if(physReg->classValue() == MiscRegClass)
             panic("Attempt to %s misc reg %i", poisoned ? "poison" : "cure", physReg->flatIndex());
@@ -352,7 +352,7 @@ class PhysRegFile
     void
     clearPoison()
     {
-        DPRINTF(RunaheadIEW, "Curing all poisoned registers.\n");
+        DPRINTF(RunaheadRegFile, "Curing all poisoned registers.\n");
         // totalNumRegs does not count misc regs
         for (int regIdx = 0; regIdx < poisonedRegs.size(); regIdx++) {
             poisonedRegs[regIdx] = false;
