@@ -89,6 +89,7 @@ def sim_fs_from_checkpoint(root, args):
         simstats = m5.stats.gem5stats.get_simstat(root).to_json()
         insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
         print(f'Simulated {insts - prev_insts} instructions in {tick - prev_tick} ticks - {cause}')
+        print(f'Progress: {insts}/{args.max_insts} insts ({(insts/args.max_insts)*100:.2f}%)')
 
         if cause == 'a thread reached the max instruction count':
             break
