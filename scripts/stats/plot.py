@@ -1,19 +1,28 @@
 from plotters.simpoint_weights import SimPointWeights
+from plotters.ift_sensitivity import IFTSensitivity
 
 from argparse import ArgumentParser
 from os import makedirs
 import os.path
+import logging
 import json
 
 import matplotlib.pyplot as plt
 
 ALL_PLOTS = [
     SimPointWeights,
+    IFTSensitivity,
     # LoadToUse,
     # InterimInsts,
     # RECycles,
     # TriggerInFlightCycles,
 ]
+
+logging.basicConfig(
+    format='[%(levelname)s] %(name)s: %(message)s',
+    level=logging.INFO,
+
+)
 
 parser = ArgumentParser()
 parser.add_argument(

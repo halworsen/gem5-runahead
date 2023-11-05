@@ -8,6 +8,8 @@ SimPoint.3.2/
 m5out/
 # debug output
 debug/
+# plots
+gem5-stats-plots/
 
 # relevant papers
 papers/*.pdf
