@@ -1210,9 +1210,14 @@ IEW::executeInsts()
         DPRINTF(IEW, "Execute: Processing PC %s, [tid:%i] [sn:%llu].\n",
                 inst->pcState(), inst->threadNumber,inst->seqNum);
 
-        if (inst->isRunahead())
+        if (inst->isRunahead()) {
             DPRINTF(RunaheadIEW, "Execute: [sn:%llu] Instruction is runahead.\n",
                    inst->seqNum);
+
+            // Stale. Mark as squashed so we can skip it
+            if (!cpu->inRunahead(tid) && !inst->isSquashed())
+                inst->setSquashed();
+        }
 
         // Notify potential listeners that this instruction has started
         // executing
