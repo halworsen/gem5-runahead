@@ -83,6 +83,7 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
       runaheadInFlightThreshold(params.runaheadInFlightThreshold),
       allowOverlappingRunahead(params.allowOverlappingRunahead),
       lllDepthThreshold(params.lllDepthThreshold),
+      runaheadEagerEntry(params.runaheadEagerEntry),
 #ifndef NDEBUG
       instcount(0),
 #endif
@@ -1609,6 +1610,13 @@ CPU::canEnterRunahead(ThreadID tid, const DynInstPtr &inst)
         return false;
     }
 
+    // Check if we should be waiting for a full ROB or not
+    if (!runaheadEagerEntry && commit.rob->numFreeEntries(tid) > 0) {
+        DPRINTF(RunaheadCPU, "[tid:%i] Cannot enter runahead, ROB is not full yet.\n", tid);
+        cpuStats.refusedRunaheadEntries[cpuStats.NotStalling]++;
+        return false;
+    }
+
     // Check if this period is potentially too short
     Cycles inFlightCycles = ticksToCycles(curTick() - inst->firstIssue);
     assert(inFlightCycles > Cycles(0));
@@ -1738,8 +1746,6 @@ CPU::restoreCheckpointState(ThreadID tid)
     freeList.reset();
     // Reset the rename maps
     const BaseISA::RegClasses &regClasses = isa[tid]->regClasses();
-    // TODO: this grabs 2 physregs for each arch reg, one for rename and one for commit
-    // this essentially nukes a full set of archregs from the phys regfile
     renameMap[tid].reset(regClasses);
     commitRenameMap[tid].reset(regClasses);
 

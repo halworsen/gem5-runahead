@@ -173,6 +173,11 @@ class BaseRunaheadCPU(BaseCPU):
 
     runaheadCacheSize = Param.MemorySize('2kB', "Runahead cache capacity")
 
+    runaheadEagerEntry = Param.Bool(
+        False,
+        'If true, runahead is entered the moment a LLL makes it to the ROB head. '
+        'Otherwise, runahead is entered when the ROB becomes full with a LLL at the head.'
+    )
     runaheadExitPolicy = Param.String(
         'Eager',
         'The exit policy that should be used with runahead execution. This determines when '

@@ -467,6 +467,9 @@ public:
     /** The depth at which a blocking memory request is considered a long latency load */
     uint8_t lllDepthThreshold;
 
+    /** Whether or not to enter runahead immediately on seeing a LLL at the ROB head */
+    bool runaheadEagerEntry;
+
   public:
 #ifndef NDEBUG
     /** Count of total number of dynamic instructions in flight. */
@@ -775,6 +778,7 @@ public:
         statistics::Scalar miscRegCured;
 
         enum {
+            NotStalling,
             ExpectedReturnSoon,
             OverlappingPeriod
         };
