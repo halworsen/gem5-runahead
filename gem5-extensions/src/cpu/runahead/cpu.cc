@@ -444,7 +444,7 @@ CPU::CPUStats::CPUStats(CPU *cpu)
 {
     // Register any of the RunaheadCPU's stats here.
     runaheadCycles.prereq(runaheadCycles);
-    realCycles.prereq(runaheadCycles);
+    realCycles.prereq(realCycles);
 
     timesIdled
         .prereq(timesIdled);
@@ -1650,7 +1650,9 @@ CPU::enterRunahead(ThreadID tid)
     saveStateForValidation(tid);
 #endif
 
+    DPRINTF(RunaheadCPU, "[tid:%i] Saving architectural state. Commit PC: %s\n", tid, commit.pcState(tid));
     archStateCheckpoint.fullSave(tid);
+    commit.storeCurrentPC(tid);
 
     DPRINTF(RunaheadCPU, "[tid:%i] Switching CPU mode to runahead.\n", tid);
     inRunahead(tid, true);

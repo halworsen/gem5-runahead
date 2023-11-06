@@ -198,6 +198,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "Number of function calls committed."),
       ADD_STAT(committedInstType, statistics::units::Count::get(),
                "Class of committed instruction"),
+      ADD_STAT(squashCycles, statistics::units::Cycle::get(),
+               "Number of cycles commit is blocked due to the ROB squashing"),
       ADD_STAT(commitEligibleSamples, statistics::units::Cycle::get(),
                "number cycles where commit BW limit reached"),
       ADD_STAT(loadsAtROBHead, statistics::units::Count::get(),
@@ -268,6 +270,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
         .flags(total | pdf | dist);
 
     committedInstType.ysubnames(enums::OpClassStrings);
+
+    squashCycles.prereq(squashCycles);
 
     loadsAtROBHead.prereq(loadsAtROBHead);
     lllAtROBHead.prereq(lllAtROBHead);
@@ -717,7 +721,7 @@ Commit::squashFromRunaheadExit(ThreadID tid)
     toIEW->commitInfo[tid].mispredictInst = NULL;
     toIEW->commitInfo[tid].squashInst = rob->findInst(tid, squashedSeqNum);
 
-    set(pc[tid], lll->pcState());
+    set(pc[tid], *storedPC[tid]);
     set(toIEW->commitInfo[tid].pc, pc[tid]);
 
     // Reset any in-flight traps
@@ -762,6 +766,7 @@ Commit::tick()
                 rob->doSquash(tid);
                 toIEW->commitInfo[tid].robSquashing = true;
                 wroteToTimeBuffer = true;
+                stats.squashCycles++;
             }
         }
     }
@@ -876,9 +881,10 @@ Commit::propagateInterrupt()
 {
     // Don't propagate intterupts if we are currently handling a trap or
     // in draining and the last observable instruction has been committed.
-    // Also don't propagate while in runahead
+    // Also don't propagate while in runahead or waiting for arch restores
     if (commitStatus[0] == TrapPending || interrupt || trapSquash[0] ||
-            tcSquash[0] || drainImminent || cpu->inRunahead(0))
+        tcSquash[0] || drainImminent || cpu->inRunahead(0) ||
+        timeBuffer->getWire(-1)->archRestore[0])
         return;
 
     // Process interrupts if interrupts are enabled, not in PAL

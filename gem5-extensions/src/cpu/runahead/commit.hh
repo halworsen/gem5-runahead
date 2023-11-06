@@ -310,12 +310,18 @@ class Commit
     /** Returns the thread ID to use based on an oldest instruction policy. */
     ThreadID oldestReady();
 
+    /** Saved PC from before runahead was entered */
+    std::unique_ptr<PCStateBase> storedPC[MaxThreads];
+
   public:
     /** Reads the PC of a specific thread. */
     const PCStateBase &pcState(ThreadID tid) { return *pc[tid]; }
 
     /** Sets the PC of a specific thread. */
     void pcState(const PCStateBase &val, ThreadID tid) { set(pc[tid], val); }
+
+    /** Stores the current PC of a specific thread */
+    void storeCurrentPC(ThreadID tid) { set(storedPC[tid], *pc[tid]); }
 
   private:
     /** Time buffer interface. */
@@ -541,6 +547,9 @@ class Commit
         statistics::Vector functionCalls;
         /** Committed instructions by instruction type (OpClass) */
         statistics::Vector2d committedInstType;
+
+        /** Total amount of cycles commit has been unable to work due to the ROB squashing */
+        statistics::Scalar squashCycles;
 
         /** Number of cycles where the commit bandwidth limit is reached. */
         statistics::Scalar commitEligibleSamples;
