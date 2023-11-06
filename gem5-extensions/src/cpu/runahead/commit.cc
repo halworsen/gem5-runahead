@@ -209,7 +209,11 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
       ADD_STAT(instsPseudoretired, statistics::units::Count::get(),
                "Number of instructions committed in runahead"),
       ADD_STAT(commitPoisonedInsts, statistics::units::Count::get(),
-               "Number of poisoned instructions retired by commit")
+               "Number of poisoned instructions retired by commit"),
+      ADD_STAT(runaheadOverhead, statistics::units::Cycle::get(),
+               "Distribution of cycles spent to exit from runahead"),
+      ADD_STAT(totalRunaheadOverhead, statistics::units::Cycle::get(),
+               "Total amount of cycles spent exiting runahead")
 {
     using namespace statistics;
 
@@ -278,6 +282,11 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
     instsPseudoretired
         .init(cpu->numThreads)
         .flags(total);
+
+    runaheadOverhead
+        .init(10)
+        .flags(statistics::total);
+    totalRunaheadOverhead.prereq(totalRunaheadOverhead);
 }
 
 void
@@ -695,6 +704,8 @@ void
 Commit::squashFromRunaheadExit(ThreadID tid)
 {
     exitRunahead[tid] = false;
+    // start counting cycles to the next committed inst for stats
+    runaheadExitCycles = 0;
 
     // Signal to all stages that they should squash and restore architectural state
     toIEW->commitInfo[tid].squash = true;
@@ -745,6 +756,10 @@ Commit::tick()
 
     std::list<ThreadID>::iterator threads = activeThreads->begin();
     std::list<ThreadID>::iterator end = activeThreads->end();
+
+    // Count cycles since runahead was exited if swapping to normal from runahead mode
+    if (runaheadExitCycles >= 0)
+        runaheadExitCycles++;
 
     // Check if any of the threads are done squashing.  Change the
     // status if they are done.
@@ -1212,6 +1227,11 @@ Commit::commitInsts()
             if (commit_success) {
                 ++num_committed;
                 stats.committedInstType[tid][head_inst->opClass()]++;
+                if (runaheadExitCycles != -1) {
+                    stats.runaheadOverhead.sample(runaheadExitCycles);
+                    stats.totalRunaheadOverhead += runaheadExitCycles;
+                    runaheadExitCycles = -1;
+                }
                 ppCommit->notify(head_inst);
 
                 // hardware transactional memory

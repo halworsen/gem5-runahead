@@ -408,6 +408,9 @@ class Commit
     /** The cause of the runahead period that is about to be exited */
     std::array<DynInstPtr, MaxThreads> runaheadCause;
 
+    /** The amount of cycles since runahead was last exited */
+    int runaheadExitCycles = -1;
+
     /**
      * Instruction passed to squashAfter().
      *
@@ -562,6 +565,10 @@ class Commit
         statistics::Vector instsPseudoretired;
         /** Total number of poisoned instructions retired by commit */
         statistics::Scalar commitPoisonedInsts;
+        /** Distribution of cycles spent to exit from runahead (runahead exited -> first real inst committed) */
+        statistics::Histogram runaheadOverhead;
+        /** Total amount of cycles spent exiting runahead */
+        statistics::Scalar totalRunaheadOverhead;
     } stats;
 };
 
