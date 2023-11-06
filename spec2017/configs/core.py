@@ -19,7 +19,8 @@ def add_core_args(parser):
     cpu_group.add_argument('--fixed-exit-latency', default=100, help='If using FixedDelayed RE exit policy, how long to wait before exiting')
     cpu_group.add_argument('--lll-latency-threshold', default=100, help='Max load latency before runahead can no longer be entered')
     cpu_group.add_argument('--overlapping-runahead', action='store_true', dest='overlapping_runahead', help='Allow overlapping runahead periods')
-    cpu_group.set_defaults(enable_runahead=True, overlapping_runahead=False)
+    cpu_group.add_argument('--eager-entry', action='store_true', dest='eager_entry', help='Eagerly enter runahead as soon as a LLL makes it to the ROB head')
+    cpu_group.set_defaults(enable_runahead=True, overlapping_runahead=False, eager_entry=False)
 
     cpu_group.add_argument('--rob-size', default=224, type=int, help='The amount of ROB entries')
 
@@ -114,6 +115,7 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
         sim_core.runaheadFixedExitLength = args.fixed_exit_latency
         sim_core.runaheadInFlightThreshold = args.lll_latency_threshold
         sim_core.allowOverlappingRunahead = args.overlapping_runahead
+        sim_core.runaheadEagerEntry = args.eager_entry
 
         # setup O3 core parameters
         sim_core.fetchWidth = args.fetch_width
