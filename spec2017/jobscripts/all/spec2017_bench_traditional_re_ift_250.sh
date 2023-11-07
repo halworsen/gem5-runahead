@@ -1,14 +1,16 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-baseline-o3"
+#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-250"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
 #SBATCH --array=1-16
+#SBATCH --exclude=idun-02-45,idun-02-49
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4000
 #SBATCH --time=7-06:00:00
+#SBATCH --exclude=idun-02-45
 #SBATCH --signal=B:SIGINT@120
 
 #
@@ -90,6 +92,7 @@ pip freeze
 
 echo
 echo "job: simulate SPEC2017 benchmark at simpoint - $BENCHMARK"
+echo "node: $(hostname)"
 echo "time: $(date)"
 echo "--- start job ---"
 
@@ -104,7 +107,12 @@ FSPARAMS=(
     "--restore-checkpoint=$M5_OUT_DIR/../m5out-gem5-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
-    "--no-runahead"
+    "--lll-threshold=3"
+    "--rcache-size=2kB"
+    "--lll-latency-threshold=250"
+    # "--overlapping-runahead"
+    "--runahead-exit-policy=Eager"
+    "--eager-entry"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"

@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-50"
+#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-300-stall-entry"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -91,7 +91,7 @@ FSPARAMS=(
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=50"
+    "--lll-latency-threshold=300"
     "--runahead-exit-policy=Eager"
 
     # Cache & memory
