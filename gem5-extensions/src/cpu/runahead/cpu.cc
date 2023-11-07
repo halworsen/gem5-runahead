@@ -1983,6 +1983,10 @@ CPU::wakeCPU()
         --cycles;
         cpuStats.idleCycles += cycles;
         baseStats.numCycles += cycles;
+        if (inRunahead(0))
+            cpuStats.runaheadCycles += cycles;
+        else
+            cpuStats.realCycles += cycles;
     }
 
     schedule(tickEvent, clockEdge());
