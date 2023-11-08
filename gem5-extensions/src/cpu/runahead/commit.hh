@@ -387,14 +387,21 @@ class Commit
 
     /** Runahead exit policies */
     enum REExitPolicy {
-        Eager = 0,
-        FixedDelayed = 1,
-        DynamicDelayed = 2,
+        Eager,
+        MinimumWork,
+        DynamicDelayed,
     };
     /** The runahead exit policy being used */
     REExitPolicy runaheadExitPolicy;
-    /** For FixedDelayed policy: how many cycles to wait until exiting */
-    int fixedDelayedExitDelay;
+
+    /**
+     * For all exit policies, the maximum number of cycles the CPU can
+     * stay in runahead after receiving an exit signal
+     */
+    Cycles runaheadExitDeadline;
+
+    /** For the MinimumWork policy: minimum insts to pseduoretire */
+    int minRunaheadWork;
 
     /** Records if a thread should exit runahead this cycle */
     bool exitRunahead[MaxThreads] = { false };

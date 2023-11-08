@@ -1739,8 +1739,10 @@ CPU::restoreCheckpointState(ThreadID tid)
 {
     DPRINTF(RunaheadCPU, "[tid:%i] Restoring architectural state after runahead squash.\n", tid);
 
+#if !defined(NDEBUG)
     // The ROB should be squashing, empty or fully squashed
     rob.archRestoreSanityCheck(tid);
+#endif
 
     // Reset the free list
     freeList.reset();

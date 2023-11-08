@@ -167,43 +167,17 @@ class BaseRunaheadCPU(BaseCPU):
     # 0 is L1, 1 is L2 and so on
     # This is more of a system/simulation parameter, really, but I'm trying to keep
     # runahead related things in the CPU
-    lllDepthThreshold = Param.Int(2,
-        'Depth threshold after which a request to be considered a long latency load'
-    )
+    lllDepthThreshold = Param.Int(2, 'Depth threshold after which a request to be considered a long latency load')
 
     runaheadCacheSize = Param.MemorySize('2kB', "Runahead cache capacity")
 
-    runaheadEagerEntry = Param.Bool(
-        False,
-        'If true, runahead is entered the moment a LLL makes it to the ROB head. '
-        'Otherwise, runahead is entered when the ROB becomes full with a LLL at the head.'
-    )
-    runaheadExitPolicy = Param.String(
-        'Eager',
-        'The exit policy that should be used with runahead execution. This determines when '
-        'runahead exits after the LLL returns. Must be one of: '
-        '"Eager", "FixedDelayed", "DynamicDelayed"'
-    )
-    runaheadFixedExitLength = Param.Int(
-        150,
-        'If using the "FixedDelayed" runahead exit policy, '
-        'how many cycles to wait until runahead is exited.'
-    )
+    runaheadEagerEntry = Param.Bool(False, 'Enter runahead immediately on LLL detection (True) or wait for full ROB (False)?')
 
-    filterRunaheadInstructions = Param.Bool(
-        True,
-        'In runahead, should the CPU filter instructions to only loads'
-        ' and instructions that generate memory addresses'
-    )
+    runaheadExitPolicy = Param.String('Eager', 'Runahead exit policy. Must be one of: "Eager", "MinimumWork", "DynamicDelayed"')
+    runaheadExitDeadline = Param.Cycles(250, 'All runahead is forced to exit within this amount of cycles.')
+    minRunaheadWork = Param.Int(100, 'MinimumWork exit policy - Minimum insts to pseudoretire before exiting.')
 
     # Set to 0 to disable
-    runaheadInFlightThreshold = Param.Cycles(
-        100,
-        'The amount of cycles a memory access has been in-flight for after which it cannot'
-        ' trigger runahead due to the assumption that the load will complete soon.'
-    )
+    runaheadInFlightThreshold = Param.Cycles(100, 'Max LLL in-flight cycles before it cannot trigger runahead.')
 
-    allowOverlappingRunahead = Param.Bool(
-        False,
-        'Should the CPU allow overlapping runahead periods'
-    )
+    allowOverlappingRunahead = Param.Bool(False, 'Allow overlapping runahead periods?')
