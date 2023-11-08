@@ -214,7 +214,9 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
       ADD_STAT(runaheadOverhead, statistics::units::Cycle::get(),
                "Distribution of cycles spent to exit from runahead"),
       ADD_STAT(totalRunaheadOverhead, statistics::units::Cycle::get(),
-               "Total amount of cycles spent exiting runahead")
+               "Total amount of cycles spent exiting runahead"),
+      ADD_STAT(runaheadExitCause, statistics::units::Count::get(),
+               "Final cause for exiting runahead")
 {
     using namespace statistics;
 
@@ -288,6 +290,10 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
         .init(10)
         .flags(statistics::total);
     totalRunaheadOverhead.prereq(totalRunaheadOverhead);
+
+    runaheadExitCause
+        .init(REExitCause::Deadline + 1)
+        .flags(statistics::total);
 }
 
 void
@@ -590,10 +596,12 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
         DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead ASAP due to eager exit policy.\n",
                 tid);
         exitRunahead[tid] = true;
+        stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
     } else if (runaheadExitPolicy == REExitPolicy::MinimumWork && instsPseudoretired[tid] >= minRunaheadWork) {
         DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead now because minimum work has been done.\n",
             tid, minRunaheadWork);
         exitRunahead[tid] = true;
+        stats.runaheadExitCause[stats.REExitCause::MinWorkDone]++;
     } else if (runaheadExitPolicy == DynamicDelayed) {
         panic("dynamic delayed runahead exit is unimplemented!");
     }
@@ -612,6 +620,7 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
 
                 DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead due to exit deadline.");
                 exitRunahead[tid] = true;
+                stats.runaheadExitCause[stats.REExitCause::Deadline]++;
             },
             "RunaheadExitDeadline", true, Event::CPU_Tick_Pri
         );
@@ -1575,6 +1584,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
                     "[tid:%i] Exiting runahead because minimum work has been done.\n",
                     tid);
             exitRunahead[tid] = true;
+            stats.runaheadExitCause[stats.REExitCause::MinWorkDone]++;
     }
 
 #if TRACING_ON

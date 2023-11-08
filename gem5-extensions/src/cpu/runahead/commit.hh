@@ -576,6 +576,13 @@ class Commit
         statistics::Histogram runaheadOverhead;
         /** Total amount of cycles spent exiting runahead */
         statistics::Scalar totalRunaheadOverhead;
+        /** Final cause for exiting runahead */
+        statistics::Vector runaheadExitCause;
+        enum REExitCause {
+            EagerExit,
+            MinWorkDone,
+            Deadline
+        };
     } stats;
 };
 
