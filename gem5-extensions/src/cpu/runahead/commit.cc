@@ -607,18 +607,23 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
     }
 
     // If we aren't exiting immediately, schedule a deadline event
+    InstSeqNum causeSeqNum = inst->seqNum;
     if (!exitRunahead[tid]) {
         EventFunctionWrapper *exitEvent = new EventFunctionWrapper(
-            [this, tid, inst]{
+            [this, tid, causeSeqNum]{
+                DPRINTF(RunaheadCommit, "[tid:%i] Runahead deadline reached for sn:%llu, "
+                                        "checking if runahead should exit.\n",
+                                        tid, causeSeqNum);
+
                 // Already exited/exiting
                 if (!cpu->inRunahead(tid) || exitRunahead[tid])
                     return;
 
                 // We're in a different runahead period
-                if (runaheadCause[tid]->seqNum != inst->seqNum)
+                if (runaheadCause[tid]->seqNum != causeSeqNum)
                     return;
 
-                DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead due to exit deadline.");
+                DPRINTF(RunaheadCommit, "[tid:%i] Runahead was not exited, exiting now runahead due to deadline.");
                 exitRunahead[tid] = true;
                 stats.runaheadExitCause[stats.REExitCause::Deadline]++;
             },
