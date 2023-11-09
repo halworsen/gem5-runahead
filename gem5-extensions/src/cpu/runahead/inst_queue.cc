@@ -1170,6 +1170,9 @@ InstructionQueue::getBlockedMemInstToExecute()
     } else {
         DynInstPtr mem_inst = std::move(retryMemInsts.front());
         retryMemInsts.pop_front();
+        // RE inst that had a forged response
+        if (mem_inst->isExecuted())
+            return nullptr;
         return mem_inst;
     }
 }
