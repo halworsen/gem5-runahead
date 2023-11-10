@@ -174,6 +174,10 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "communicate backwards"),
       ADD_STAT(branchMispredicts, statistics::units::Count::get(),
                "The number of times a branch was mispredicted"),
+      ADD_STAT(realBranchMispredicts, statistics::units::Count::get(),
+               "The number of times a branch was mispredicted in normal mode"),
+      ADD_STAT(runaheadBranchMispredicts, statistics::units::Count::get(),
+               "The number of times a branch was mispredicted in runahead mode"),
       ADD_STAT(numCommittedDist, statistics::units::Count::get(),
                "Number of insts commited each cycle"),
       ADD_STAT(instsCommitted, statistics::units::Count::get(),
@@ -223,6 +227,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
     commitSquashedInsts.prereq(commitSquashedInsts);
     commitNonSpecStalls.prereq(commitNonSpecStalls);
     branchMispredicts.prereq(branchMispredicts);
+    realBranchMispredicts.prereq(realBranchMispredicts);
+    runaheadBranchMispredicts.prereq(runaheadBranchMispredicts);
 
     numCommittedDist
         .init(0,commit->commitWidth,1)
@@ -1063,6 +1069,10 @@ Commit::commit()
                      toIEW->commitInfo[tid].branchTaken = true;
                 }
                 ++stats.branchMispredicts;
+                if (fromIEW->mispredictInst[tid]->isRunahead())
+                    ++stats.runaheadBranchMispredicts;
+                else
+                    ++stats.realBranchMispredicts;
             }
 
             set(toIEW->commitInfo[tid].pc, fromIEW->pc[tid]);

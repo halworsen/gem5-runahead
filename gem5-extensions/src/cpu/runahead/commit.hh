@@ -530,6 +530,10 @@ class Commit
          * squash.
          */
         statistics::Scalar branchMispredicts;
+        /** Branch mispredicts that caused a squash in normal mode */
+        statistics::Scalar realBranchMispredicts;
+        /** Branch mispredicts that caused a squash in runahead mode */
+        statistics::Scalar runaheadBranchMispredicts;
         /** Distribution of the number of committed instructions each cycle. */
         statistics::Distribution numCommittedDist;
 
