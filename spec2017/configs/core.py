@@ -16,7 +16,8 @@ def add_core_args(parser):
     cpu_group.add_argument('--lll-threshold', default=3, help='Memory depth at which a load is considered a LLL')
     cpu_group.add_argument('--rcache-size', default='2kB', help='Size of the runahead cache')
     cpu_group.add_argument('--runahead-exit-policy', default='Eager', help='Runahead exit policy')
-    cpu_group.add_argument('--fixed-exit-latency', default=100, help='If using FixedDelayed RE exit policy, how long to wait before exiting')
+    cpu_group.add_argument('--runahead-exit-deadline', default=200, help='Runahead exit deadline from LLL return')
+    cpu_group.add_argument('--runahead-min-work', default=100, help='MinimumWork exit policy - how many insts to pseudoretire before allowing exit')
     cpu_group.add_argument('--lll-latency-threshold', default=100, help='Max load latency before runahead can no longer be entered')
     cpu_group.add_argument('--overlapping-runahead', action='store_true', dest='overlapping_runahead', help='Allow overlapping runahead periods')
     cpu_group.add_argument('--eager-entry', action='store_true', dest='eager_entry', help='Eagerly enter runahead as soon as a LLL makes it to the ROB head')
@@ -111,11 +112,12 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
         sim_core.enableRunahead = args.enable_runahead
         sim_core.lllDepthThreshold = args.lll_threshold
         sim_core.runaheadCacheSize = args.rcache_size
-        sim_core.runaheadExitPolicy = args.runahead_exit_policy
-        sim_core.runaheadFixedExitLength = args.fixed_exit_latency
         sim_core.runaheadInFlightThreshold = args.lll_latency_threshold
         sim_core.allowOverlappingRunahead = args.overlapping_runahead
         sim_core.runaheadEagerEntry = args.eager_entry
+        sim_core.runaheadExitPolicy = args.runahead_exit_policy
+        sim_core.runaheadExitDeadline = args.runahead_exit_deadline
+        sim_core.minRunaheadWork = args.runahead_min_work
 
         # setup O3 core parameters
         sim_core.fetchWidth = args.fetch_width
