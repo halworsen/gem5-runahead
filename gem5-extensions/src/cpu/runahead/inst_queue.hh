@@ -547,6 +547,18 @@ class InstructionQueue
      */
     void dumpInsts();
 
+    /** The number of instructions in the IQ */
+    size_t size(ThreadID tid) { return instList[tid].size(); }
+
+    /** Whether or not the IQ is empty */
+    bool empty(ThreadID tid) { return instList[tid].empty(); }
+
+    /** Get the oldest instruction */
+    const DynInstPtr &getOldestInst(ThreadID tid) { return instList[tid].front(); }
+
+    /** Get the youngest instruction */
+    const DynInstPtr &getYoungestInst(ThreadID tid) { return instList[tid].back(); }
+
     struct IQIOStats : public statistics::Group
     {
         IQIOStats(statistics::Group *parent);

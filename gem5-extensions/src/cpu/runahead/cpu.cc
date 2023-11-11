@@ -1637,14 +1637,14 @@ CPU::canEnterRunahead(ThreadID tid, const DynInstPtr &inst)
     return true;
 }
 
-void
+bool
 CPU::enterRunahead(ThreadID tid)
 {
     DynInstPtr robHead = rob.readHeadInst(tid);
     assert(robHead->isLoad() && !robHead->isSquashed() && !robHead->isRunahead());
 
     if (!canEnterRunahead(tid, robHead))
-        return;
+        return false;
 
     DPRINTF(RunaheadCPU, "[tid:%i] Entering runahead, caused by sn:%llu (PC %s).\n",
                          tid, robHead->seqNum, robHead->pcState());
@@ -1691,6 +1691,8 @@ CPU::enterRunahead(ThreadID tid)
     commit.instsPseudoretired[tid] = 0;
     runaheadEnteredTick = curTick();
     cpuStats.runaheadPeriods++;
+
+    return true;
 }
 
 void

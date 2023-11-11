@@ -417,6 +417,19 @@ class Commit
 
     /** The amount of cycles since runahead was last exited */
     int runaheadExitCycles = -1;
+    /** The amount of cycles since runahead was entered */
+    int runaheadEnterCycles = -1;
+    /**
+     * Number of instructions in the IQ when runahead was entered
+     * While tracking runahead exit overhead, this is the amount
+     * of insts that need to enter the IQ before stopping counting cycles
+     */
+    size_t trackedIqInsts = 0;
+    /** Youngest sequence number in the IQ last cycle. Used when tracking runahead exit overhead */
+    InstSeqNum trackedIqSeqNum = 0;
+    /** Whether the IQ was empty when runahead was entered */
+    bool trackedIqEmpty = true;
+
 
     /**
      * Instruction passed to squashAfter().
@@ -576,10 +589,18 @@ class Commit
         statistics::Vector instsPseudoretired;
         /** Total number of poisoned instructions retired by commit */
         statistics::Scalar commitPoisonedInsts;
-        /** Distribution of cycles spent to exit from runahead (runahead exited -> first real inst committed) */
-        statistics::Histogram runaheadOverhead;
+
+        /** Distribution of cycles spent to enter runahead (runahead entered -> LLL commits) */
+        statistics::Histogram runaheadEnterOverhead;
+        /** Distribution of cycles spent to exit from runahead (runahead exited -> youngest IQ PC re-enters IQ) */
+        statistics::Histogram runaheadExitOverhead;
+        /** Total amount of cycles spent entering runahead */
+        statistics::Scalar totalRunaheadEnterOverhead;
         /** Total amount of cycles spent exiting runahead */
-        statistics::Scalar totalRunaheadOverhead;
+        statistics::Scalar totalRunaheadExitOverhead;
+        /** Total amount of cycles spent entering and exiting runahead */
+        statistics::Formula totalRunaheadOverhead;
+
         /** Final cause for exiting runahead */
         statistics::Vector runaheadExitCause;
         enum REExitCause {

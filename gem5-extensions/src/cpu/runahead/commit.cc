@@ -215,10 +215,16 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "Number of instructions committed in runahead"),
       ADD_STAT(commitPoisonedInsts, statistics::units::Count::get(),
                "Number of poisoned instructions retired by commit"),
-      ADD_STAT(runaheadOverhead, statistics::units::Cycle::get(),
+      ADD_STAT(runaheadEnterOverhead, statistics::units::Cycle::get(),
+               "Distribution of cycles spent to enter runahead"),
+      ADD_STAT(runaheadExitOverhead, statistics::units::Cycle::get(),
                "Distribution of cycles spent to exit from runahead"),
-      ADD_STAT(totalRunaheadOverhead, statistics::units::Cycle::get(),
+      ADD_STAT(totalRunaheadEnterOverhead, statistics::units::Cycle::get(),
+               "Total amount of cycles spent entering runahead"),
+      ADD_STAT(totalRunaheadExitOverhead, statistics::units::Cycle::get(),
                "Total amount of cycles spent exiting runahead"),
+      ADD_STAT(totalRunaheadOverhead, statistics::units::Cycle::get(),
+               "Total amount of cycles spent entering and exiting runahead"),
       ADD_STAT(runaheadExitCause, statistics::units::Count::get(),
                "Final cause for exiting runahead")
 {
@@ -292,10 +298,15 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
         .init(cpu->numThreads)
         .flags(total);
 
-    runaheadOverhead
+    runaheadEnterOverhead
+        .init(5)
+        .flags(statistics::total);
+    runaheadExitOverhead
         .init(10)
         .flags(statistics::total);
-    totalRunaheadOverhead.prereq(totalRunaheadOverhead);
+    totalRunaheadEnterOverhead.prereq(totalRunaheadEnterOverhead);
+    totalRunaheadExitOverhead.prereq(totalRunaheadExitOverhead);
+    totalRunaheadOverhead = totalRunaheadEnterOverhead + totalRunaheadExitOverhead;
 
     runaheadExitCause
         .init(REExitCause::Deadline + 1)
@@ -742,6 +753,10 @@ Commit::squashFromRunaheadExit(ThreadID tid)
     exitRunahead[tid] = false;
     // start counting cycles to the next committed inst for stats
     runaheadExitCycles = 0;
+    if (!iewStage->instQueue.empty(tid))
+        trackedIqSeqNum = iewStage->instQueue.getYoungestInst(tid)->seqNum;
+    else
+        trackedIqSeqNum = 0;
 
     // Signal to all stages that they should squash and restore architectural state
     toIEW->commitInfo[tid].squash = true;
@@ -793,7 +808,9 @@ Commit::tick()
     std::list<ThreadID>::iterator threads = activeThreads->begin();
     std::list<ThreadID>::iterator end = activeThreads->end();
 
-    // Count cycles since runahead was exited if swapping to normal from runahead mode
+    // Count cycles since runahead was entered/exited if swapping mode
+    if (runaheadEnterCycles >= 0)
+        runaheadEnterCycles++;
     if (runaheadExitCycles >= 0)
         runaheadExitCycles++;
 
@@ -869,6 +886,19 @@ Commit::tick()
     if (wroteToTimeBuffer) {
         DPRINTF(Activity, "Activity This Cycle.\n");
         cpu->activityThisCycle();
+    }
+
+    // Check if we should stop counting runahead exit overhead cycles
+    if (runaheadExitCycles != -1 && trackedIqInsts == 0) {
+        if (trackedIqInsts == 0) {
+            stats.runaheadExitOverhead.sample(runaheadExitCycles);
+            stats.totalRunaheadExitOverhead += runaheadExitCycles;
+            runaheadExitCycles = -1;
+        } else {
+            trackedIqInsts -= iewStage->instQueue.size(0);
+            if (trackedIqInsts < 0)
+                trackedIqInsts = 0;
+        }
     }
 
     updateStatus();
@@ -1221,8 +1251,9 @@ Commit::commitInsts()
 
                     // If not already in runahead, try to enter it
                     // If in runahead, make sure the load isn't already poisoned (waiting to drain)
+                    bool enteredRunahead = false;
                     if (!cpu->inRunahead(tid)) {
-                        cpu->enterRunahead(tid);
+                        enteredRunahead = cpu->enterRunahead(tid);
                     } else if (!head_inst->isPoisoned()) {
                         // If in runahead, immediately "complete" it to avoid blocking on it
                         assert(head_inst->isRunahead());
@@ -1230,6 +1261,14 @@ Commit::commitInsts()
                                 "[tid:%i] Load was a runahead LLL. Attempting to forge response.\n", tid);
                         // Tell the CPU to deal with it. This is kinda ugly, LSQ should handle these
                         cpu->handleRunaheadLLL(head_inst);
+                    }
+
+                    if (enteredRunahead) {
+                        // Record the amount of insts in the IQ (to track exit overhead later)
+                        trackedIqInsts = iewStage->instQueue.size(tid);
+                        trackedIqEmpty = iewStage->instQueue.empty(tid);
+                        // Start tracking runahead entry overhead
+                        runaheadEnterCycles = 0;
                     }
 
                     break;
@@ -1267,11 +1306,21 @@ Commit::commitInsts()
             if (commit_success) {
                 ++num_committed;
                 stats.committedInstType[tid][head_inst->opClass()]++;
-                if (runaheadExitCycles != -1) {
-                    stats.runaheadOverhead.sample(runaheadExitCycles);
-                    stats.totalRunaheadOverhead += runaheadExitCycles;
+
+                // First inst committed after entering runahead, record entry overhead
+                if (head_inst->isRunahead() && runaheadEnterCycles != -1) {
+                    stats.runaheadEnterOverhead.sample(runaheadEnterCycles);
+                    stats.totalRunaheadEnterOverhead += runaheadEnterCycles;
+                    runaheadEnterCycles = -1;
+                }
+
+                // IQ was empty, so count overhead as time until the first real inst is committed
+                if (runaheadExitCycles != -1 && trackedIqEmpty) {
+                    stats.runaheadExitOverhead.sample(runaheadExitCycles);
+                    stats.totalRunaheadExitOverhead += runaheadExitCycles;
                     runaheadExitCycles = -1;
                 }
+
                 ppCommit->notify(head_inst);
 
                 // hardware transactional memory

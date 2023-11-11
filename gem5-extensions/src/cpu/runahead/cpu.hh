@@ -418,8 +418,11 @@ public:
     /** Check if we can enter runahead right now, caused by the given inst */
     bool canEnterRunahead(ThreadID tid, const DynInstPtr &inst);
 
-    /** Enter runahead, starting from the instruction at the head of the ROB */
-    void enterRunahead(ThreadID tid);
+    /**
+     * Try to enter runahead, starting from the instruction at the head of the ROB.
+     * Returns true if runahead was entered.
+     */
+    bool enterRunahead(ThreadID tid);
 
     /**
      * Signal commit that the runahead-causing LLL has returned
