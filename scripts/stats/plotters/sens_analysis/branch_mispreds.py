@@ -8,16 +8,17 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
-class IFTSensitivityREPeriods(Plotter):
-    name = 'Runahead periods for different runahead IFTs'
-    fname = 'ift_sensitivity_re_periods'
-    description = 'Sensitivity analysis of IPC improvements relative to baseline with various LLL in-flight cycle thresholds'
+class IFTBranchMispredicts(Plotter):
+    name = 'Real branch mispredictions for various runahead IFTs'
+    fname = 'ift_sensitivity_branch_mispreds'
+    description = 'Sensitivity analysis of branch mispredictions for different runahead in-flight thresholds'
 
     log_dir = '/cluster/home/markuswh/gem5-runahead/spec2017/logs'
 
     run_pat = re.compile(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$')
 
     run_colors = [
+        'black',
         'green',
         'red',
         'darkorange',
@@ -66,35 +67,17 @@ class IFTSensitivityREPeriods(Plotter):
     def plot(self) -> None:
         benchmarks = [b for b in self.data.keys()]
         benchmarks = sorted(benchmarks)
-        runs = [run for run in self.data[list(self.data.keys())[0]].keys() if run != 'baseline']
-        runs = sorted(runs, key=lambda r: int(r))
+        runs = list(self.data[list(self.data.keys())[0]].keys())
+        runs = sorted(runs)
 
-        # Compute relative IPC to the baseline benchmark
-        reps = {b: [] for b in benchmarks}
+        mispreds = {b: [] for b in benchmarks}
         for bench, data in self.data.items():
-            LOG.info(f'reading runahead periods for {bench}:')
-            for run in runs:
-                try:
-                    rep = data[run]['system']['processor']['cores1']['core']['runaheadPeriods']['values'][0]
-                except:
-                    rep = 0
-                reps[bench].append(rep)
-                LOG.info(f'\t{run} - {reps[bench][-1]}')
+             LOG.info(f'getting mispredictions for {bench}:')
+             for run in runs:
+                mps = data[run]['system']['processor']['cores1']['core']['commit']['realBranchMispredicts']['values'][0]
+                mispreds[bench].append(mps)
+                LOG.info(f'\t{run} - {mps}')
 
-        # 2nd pass to compute geometric mean IPC increase across all benchmarks
-        means = []
-        # runs = ('50', '100', '150', '200', '250')
-        LOG.info('computing geometric mean relative IPCs')
-        for i, run in enumerate(runs):
-            re_periods = []
-            # collect all relative re_periods for this run across all benchmarks
-            for bench in reps.keys():
-                re_periods.append(reps[bench][i])
-            re_periods = np.array(re_periods)
-            means.append(np.mean(re_periods))
-            LOG.info(f'\t{run} - {means[-1]}')
-
-        # plot each benchmark's relative IPCs
         xs = [0]
         bar_width = 1
         offsets = np.array([j * bar_width for j in range(len(runs))])
@@ -102,7 +85,7 @@ class IFTSensitivityREPeriods(Plotter):
         for bench in benchmarks:
             plt.bar(
                 x=xs[-1] + offsets,
-                height=np.array(reps[bench]),
+                height=np.array(mispreds[bench]),
                 width=bar_width,
                 color=self.run_colors,
             )
@@ -111,7 +94,17 @@ class IFTSensitivityREPeriods(Plotter):
             new_x = xs[-1] + (bar_width * len(runs)) + 5 * bar_width
             xs.append(new_x)
 
-        # plot geometric means
+        means = []
+        LOG.info('computing mean mispredictions')
+        for i, run in enumerate(runs):
+            bench_mispreds = []
+            # collect all mispreds for this run across all benchmarks
+            for bench in mispreds.keys():
+                bench_mispreds.append(mispreds[bench][i])
+            bench_mispreds = np.array(bench_mispreds)
+            means.append(np.mean(bench_mispreds))
+            LOG.info(f'\t{run} - {means[-1]}')
+
         plt.bar(
             x=xs[-1] + offsets,
             height=np.array(means),
@@ -119,13 +112,12 @@ class IFTSensitivityREPeriods(Plotter):
             color=self.run_colors,
         )
 
-        plt.ylabel('Runahead periods')
+        plt.ylabel('Branch mispredictions')
         plt.xticks(
             np.array(xs) + (bar_width * len(runs)) / 2,
-            list(benchmarks) + ['mean'],
+            list(benchmarks + ['mean']),
             rotation=90
         )
-        plt.yscale('log')
 
         plt.legend(
             runs,

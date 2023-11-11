@@ -47,11 +47,11 @@ class EagerEntryIPC(Plotter):
             # Read the simulation outputs
             lazy_path = os.path.join(
                 self.log_dir, bench_dir.name,
-                'm5out-gem5-spec2017-bench-traditional-re-ift-300-lazy-entry', 'gem5stats.json'
+                'm5out-gem5-spec2017-bench-traditional-re-lazy-entry', 'gem5stats.json'
             )
             eager_path = os.path.join(
                 self.log_dir, bench_dir.name,
-                'm5out-gem5-spec2017-bench-traditional-re-ift-300-eager-entry', 'gem5stats.json'
+                'm5out-gem5-spec2017-bench-traditional-re-eager-entry', 'gem5stats.json'
             )
 
             # Read their stats

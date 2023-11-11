@@ -8,25 +8,12 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
-class IFTSensitivityREPeriods(Plotter):
-    name = 'Runahead periods for different runahead IFTs'
-    fname = 'ift_sensitivity_re_periods'
+class InterimRetiredInsts(Plotter):
+    name = 'Mean instructions retired in interim normal periods'
+    fname = 'interim_retired_insts'
     description = 'Sensitivity analysis of IPC improvements relative to baseline with various LLL in-flight cycle thresholds'
 
     log_dir = '/cluster/home/markuswh/gem5-runahead/spec2017/logs'
-
-    run_pat = re.compile(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$')
-
-    run_colors = [
-        'green',
-        'red',
-        'darkorange',
-        'blue',
-        'magenta',
-        'darkslategray',
-        'cyan',
-        'tan',
-    ]
 
     def load_data(self) -> None:
         self.data = {}
@@ -122,7 +109,7 @@ class IFTSensitivityREPeriods(Plotter):
         plt.ylabel('Runahead periods')
         plt.xticks(
             np.array(xs) + (bar_width * len(runs)) / 2,
-            list(benchmarks) + ['mean'],
+            list(benchmarks) + ['gmean'],
             rotation=90
         )
         plt.yscale('log')

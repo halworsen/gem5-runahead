@@ -8,10 +8,10 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
-class IFTSensitivityREPeriods(Plotter):
-    name = 'Runahead periods for different runahead IFTs'
-    fname = 'ift_sensitivity_re_periods'
-    description = 'Sensitivity analysis of IPC improvements relative to baseline with various LLL in-flight cycle thresholds'
+class IFTFracRunahead(Plotter):
+    name = 'Fraction of retired instructions that are runahead for different IFTs'
+    fname = 'ift_frac_runahead'
+    description = 'Fraction of total insts that were runahead'
 
     log_dir = '/cluster/home/markuswh/gem5-runahead/spec2017/logs'
 
@@ -70,28 +70,25 @@ class IFTSensitivityREPeriods(Plotter):
         runs = sorted(runs, key=lambda r: int(r))
 
         # Compute relative IPC to the baseline benchmark
-        reps = {b: [] for b in benchmarks}
+        re_fracs = {b: [] for b in benchmarks}
         for bench, data in self.data.items():
-            LOG.info(f'reading runahead periods for {bench}:')
+            LOG.info(f'computing RE fractions for {bench}:')
             for run in runs:
-                try:
-                    rep = data[run]['system']['processor']['cores1']['core']['runaheadPeriods']['values'][0]
-                except:
-                    rep = 0
-                reps[bench].append(rep)
-                LOG.info(f'\t{run} - {reps[bench][-1]}')
+                insts = data[run]['simInsts']['values'][0]
+                re = data[run]['system']['processor']['cores1']['core']['pseudoRetiredInsts']['values'][0]
+                re_fracs[bench].append(re / (insts + re))
+                LOG.info(f'\t{run} - {re_fracs[bench][-1]}')
 
-        # 2nd pass to compute geometric mean IPC increase across all benchmarks
+        # 2nd pass to compute mean RE fracs
         means = []
-        # runs = ('50', '100', '150', '200', '250')
-        LOG.info('computing geometric mean relative IPCs')
+        LOG.info('computing mean RE fractions')
         for i, run in enumerate(runs):
-            re_periods = []
-            # collect all relative re_periods for this run across all benchmarks
-            for bench in reps.keys():
-                re_periods.append(reps[bench][i])
-            re_periods = np.array(re_periods)
-            means.append(np.mean(re_periods))
+            fracs = []
+            # collect all relative fracs for this run across all benchmarks
+            for bench in re_fracs.keys():
+                fracs.append(re_fracs[bench][i])
+            fracs = np.array(fracs)
+            means.append(np.mean(fracs))
             LOG.info(f'\t{run} - {means[-1]}')
 
         # plot each benchmark's relative IPCs
@@ -102,7 +99,7 @@ class IFTSensitivityREPeriods(Plotter):
         for bench in benchmarks:
             plt.bar(
                 x=xs[-1] + offsets,
-                height=np.array(reps[bench]),
+                height=np.array(re_fracs[bench]),
                 width=bar_width,
                 color=self.run_colors,
             )
@@ -119,13 +116,13 @@ class IFTSensitivityREPeriods(Plotter):
             color=self.run_colors,
         )
 
-        plt.ylabel('Runahead periods')
+        plt.ylabel('Runahead fraction')
         plt.xticks(
             np.array(xs) + (bar_width * len(runs)) / 2,
             list(benchmarks) + ['mean'],
             rotation=90
         )
-        plt.yscale('log')
+        plt.ylim(0, 0.4)
 
         plt.legend(
             runs,

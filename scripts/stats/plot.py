@@ -1,4 +1,5 @@
 from plotters.simpoint_weights import SimPointWeights
+
 from plotters.sens_analysis.ift_sensitivity import IFTSensitivity, IFTSensitivityReal, OverheadAdjustedIFTSensitivity
 from plotters.sens_analysis.l2u_overflows import L2UOverflows
 from plotters.sens_analysis.commit_squash_cycles import CommitSquashCycles
@@ -6,6 +7,10 @@ from plotters.sens_analysis.mean_l2u import MeanL2U
 from plotters.sens_analysis.overlapping_runahead import OverlappingRE
 from plotters.sens_analysis.eager_entry import EagerEntryIPC
 from plotters.sens_analysis.runahead_periods import IFTSensitivityREPeriods
+from plotters.sens_analysis.frac_runahead import IFTFracRunahead
+from plotters.sens_analysis.branch_mispreds import IFTBranchMispredicts
+
+from plotters.exit_policy.interim_retired import InterimRetiredInsts
 
 from argparse import ArgumentParser
 from os import makedirs
@@ -21,14 +26,19 @@ ALL_PLOTS = [
 
     # Sensitivity analysis
     # IFTSensitivity,
-    # IFTSensitivityReal,
-    OverheadAdjustedIFTSensitivity,
+    IFTSensitivityReal,
+    # OverheadAdjustedIFTSensitivity,
     # L2UOverflows,
     # CommitSquashCycles,
     # MeanL2U,
     # OverlappingRE,
     # EagerEntryIPC,
     # IFTSensitivityREPeriods,
+    # IFTFracRunahead,
+    # IFTBranchMispredicts,
+
+    # Investigation of exit policy
+    # InterimRetiredInsts,
 
     # Other
     # LoadToUse,

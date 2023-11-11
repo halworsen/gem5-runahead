@@ -47,11 +47,11 @@ class OverlappingRE(Plotter):
             # Read the simulation outputs
             no_overlap_path = os.path.join(
                 self.log_dir, bench_dir.name,
-                'm5out-gem5-spec2017-bench-traditional-re-ift-300-no-overlap', 'gem5stats.json'
+                'm5out-gem5-spec2017-bench-traditional-re-no-overlap', 'gem5stats.json'
             )
             overlap_path = os.path.join(
                 self.log_dir, bench_dir.name,
-                'm5out-gem5-spec2017-bench-traditional-re-ift-300-overlap', 'gem5stats.json'
+                'm5out-gem5-spec2017-bench-traditional-re-overlap', 'gem5stats.json'
             )
 
             # Read their stats

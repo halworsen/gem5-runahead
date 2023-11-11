@@ -69,6 +69,8 @@ class L2UOverflows(Plotter):
         benchmarks = sorted(benchmarks)
         runs = list(self.data[list(self.data.keys())[0]].keys())
         runs = sorted(runs)
+        # move the baseline to the front
+        runs = runs[:-1] + [runs[-1]]
 
         # Get the overflowing L2Us
         overflows = {b: [] for b in benchmarks}

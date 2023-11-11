@@ -123,7 +123,7 @@ class IFTSensitivity(Plotter):
             list(benchmarks) + ['gmean'],
             rotation=90
         )
-        plt.ylim(0.9)
+        plt.ylim(0.8)
 
         plt.legend(
             runs,
@@ -201,6 +201,8 @@ class IFTSensitivityReal(Plotter):
         runs = [run for run in self.data[list(self.data.keys())[0]].keys() if run != 'baseline']
         runs = sorted(runs, key=lambda r: int(r))
 
+        fig, (ax1, ax2) = plt.subplots(ncols=2)
+
         # Compute relative IPC to the baseline benchmark
         relative_ipcs = {b: [] for b in benchmarks}
         for bench, data in self.data.items():
@@ -230,7 +232,7 @@ class IFTSensitivityReal(Plotter):
         offsets = np.array([j * bar_width for j in range(len(runs))])
         assert(len(offsets) == len(runs))
         for bench in benchmarks:
-            plt.bar(
+            ax1.bar(
                 x=xs[-1] + offsets,
                 height=np.array(relative_ipcs[bench]),
                 width=bar_width,
@@ -242,35 +244,90 @@ class IFTSensitivityReal(Plotter):
             xs.append(new_x)
 
         # plot geometric means
-        plt.bar(
+        ax1.bar(
             x=xs[-1] + offsets,
             height=np.array(gmeans),
             width=bar_width,
             color=self.run_colors,
         )
 
-        plt.ylabel('Relative NIPC')
-        plt.xticks(
+        ax1.set_ylabel('Relative NIPC')
+        ax1.set_xticks(
             np.array(xs) + (bar_width * len(runs)) / 2,
             list(benchmarks) + ['gmean'],
             rotation=90
         )
-        plt.ylim(0.9)
+        ax1.set_ylim(0.9)
 
-        plt.legend(
+        leg = fig.legend(
             runs,
             ncol=2,
             markerscale=0.5,
             fontsize=8,
             handleheight=0.7,
             handlelength=0.7,
-            loc='upper left'
+            bbox_to_anchor=(0.19, 0.86)
         )
-        leg = plt.gca().get_legend()
         for i, handle in enumerate(leg.legendHandles):
             handle.set_color(self.run_colors[i])
 
-        plt.axhline(y=1.0, color='black', linewidth=0.5, linestyle='--')
+        ax1.axhline(y=1.0, color='black', linewidth=0.5, linestyle='--')
+
+        # Read pseudoretired insts
+        pseudoretireds = {b: [] for b in benchmarks}
+        for bench, data in self.data.items():
+            LOG.info(f'reading pseudoretired insts for {bench}:')
+            for run in runs:
+                pr = data[run]['system']['processor']['cores1']['core']['pseudoRetiredInsts']['values'][0]
+                pseudoretireds[bench].append(pr)
+                LOG.info(f'\t{run} - {pseudoretireds[bench][-1]}')
+
+        # 2nd pass to compute means
+        means = []
+        LOG.info('computing means')
+        for i, run in enumerate(runs):
+            prs = []
+            # collect all relative prs for this run across all benchmarks
+            for bench in pseudoretireds.keys():
+                prs.append(pseudoretireds[bench][i])
+            prs = np.array(prs)
+            means.append(prs.mean())
+            LOG.info(f'\t{run} - {means[-1]}')
+
+        xs = [0]
+        bar_width = 1
+        offsets = np.array([j * bar_width for j in range(len(runs))])
+        assert(len(offsets) == len(runs))
+        for bench in benchmarks:
+            ax2.bar(
+                x=xs[-1] + offsets,
+                height=np.array(pseudoretireds[bench]),
+                width=bar_width,
+                color=self.run_colors,
+            )
+
+            # add some bar widths of padding between each group
+            new_x = xs[-1] + (bar_width * len(runs)) + 5 * bar_width
+            xs.append(new_x)
+
+        # plot means
+        ax2.bar(
+            x=xs[-1] + offsets,
+            height=np.array(means),
+            width=bar_width,
+            color=self.run_colors,
+        )
+
+        ax2.set_title('Insts pseudoretired')
+        ax2.set_ylabel('Instructions')
+        ax2.set_xticks(
+            np.array(xs) + (bar_width * len(runs)) / 2,
+            list(benchmarks) + ['mean'],
+            rotation=90
+        )
+        ax2.set_yscale('log')
+
+        fig.set_figwidth(10)
 
 class OverheadAdjustedIFTSensitivity(Plotter):
     name = 'Overhead-adjusted IPC relative to baseline for runahead IFTs'
