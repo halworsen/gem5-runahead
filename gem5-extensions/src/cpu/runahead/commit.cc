@@ -602,7 +602,7 @@ Commit::generateTCEvent(ThreadID tid)
 void
 Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
 {
-    DPRINTF(RunaheadCommit, "[tid:%i] Runahead exit signal received, cause inst sn: %llu, PC: %s.\n",
+    DPRINTF(RunaheadCommit, "[tid:%i] Runahead exit signal received, cause inst sn:%llu, PC: %s.\n",
                      tid, inst->seqNum, inst->pcState());
 
     runaheadExitable[tid] = true;
@@ -614,12 +614,17 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
                 tid);
         exitRunahead[tid] = true;
         stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
-    } else if (runaheadExitPolicy == REExitPolicy::MinimumWork && instsPseudoretired[tid] >= minRunaheadWork) {
-        DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead now because minimum work has been done.\n",
-            tid, minRunaheadWork);
-        exitRunahead[tid] = true;
-        stats.runaheadExitCause[stats.REExitCause::MinWorkDone]++;
-    } else if (runaheadExitPolicy == DynamicDelayed) {
+    } else if (runaheadExitPolicy == REExitPolicy::MinimumWork) {
+        if (instsPseudoretired[tid] >= minRunaheadWork) {
+            DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead now because minimum work has been done.\n",
+                tid, minRunaheadWork);
+            exitRunahead[tid] = true;
+            stats.runaheadExitCause[stats.REExitCause::MinWorkDone]++;
+        } else {
+            DPRINTF(RunaheadCommit, "[tid:%i] %llu/%llu insts have been pseudoretired. Runahead will exit later.\n",
+                    tid, instsPseudoretired[tid], minRunaheadWork);
+        }
+    } else if (runaheadExitPolicy == REExitPolicy::DynamicDelayed) {
         panic("dynamic delayed runahead exit is unimplemented!");
     }
 
@@ -640,13 +645,13 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
                 if (runaheadCause[tid]->seqNum != causeSeqNum)
                     return;
 
-                DPRINTF(RunaheadCommit, "[tid:%i] Runahead was not exited, exiting now runahead due to deadline.");
+                DPRINTF(RunaheadCommit, "[tid:%i] Runahead was not exited, exiting now runahead due to deadline.", tid);
                 exitRunahead[tid] = true;
                 stats.runaheadExitCause[stats.REExitCause::Deadline]++;
             },
             "RunaheadExitDeadline", true, Event::CPU_Tick_Pri
         );
-        cpu->schedule(exitEvent, curTick() + cpu->clockEdge(runaheadExitDeadline));
+        cpu->schedule(exitEvent, cpu->clockEdge(runaheadExitDeadline));
     }
 }
 
@@ -876,29 +881,12 @@ Commit::tick()
     while (threads != end) {
         ThreadID tid = *threads++;
 
-        wasRunahead[tid] = cpu->inRunahead(tid);
-
-        // If we signalled to ourself that we should perform an arch restore, do so now
-        if (timeBuffer->getWire(-1)->archRestore[tid])
-            cpu->restoreCheckpointState(tid);
+        updateRunaheadState(tid);
     }
 
     if (wroteToTimeBuffer) {
         DPRINTF(Activity, "Activity This Cycle.\n");
         cpu->activityThisCycle();
-    }
-
-    // Check if we should stop counting runahead exit overhead cycles
-    if (runaheadExitCycles != -1 && trackedIqInsts == 0) {
-        if (trackedIqInsts == 0) {
-            stats.runaheadExitOverhead.sample(runaheadExitCycles);
-            stats.totalRunaheadExitOverhead += runaheadExitCycles;
-            runaheadExitCycles = -1;
-        } else {
-            trackedIqInsts -= iewStage->instQueue.size(0);
-            if (trackedIqInsts < 0)
-                trackedIqInsts = 0;
-        }
     }
 
     updateStatus();
@@ -1639,18 +1627,6 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     // Finally clear the head ROB entry.
     rob->retireHead(tid);
 
-    // If waiting for minimum work to be completed, check if we're done
-    if (runaheadExitPolicy == REExitPolicy::MinimumWork &&
-        runaheadExitable[tid] &&
-        instsPseudoretired[tid] >= minRunaheadWork
-        ) {
-            DPRINTF(RunaheadCommit,
-                    "[tid:%i] Exiting runahead because minimum work has been done.\n",
-                    tid);
-            exitRunahead[tid] = true;
-            stats.runaheadExitCause[stats.REExitCause::MinWorkDone]++;
-    }
-
 #if TRACING_ON
     if (debug::O3PipeView) {
         head_inst->commitTick = curTick() - head_inst->fetchTick;
@@ -1714,6 +1690,55 @@ Commit::markCompletedInsts()
 
             // Mark the instruction as ready to commit.
             fromIEW->insts[inst_num]->setCanCommit();
+        }
+    }
+}
+
+void
+Commit::updateRunaheadState(ThreadID tid)
+{
+    wasRunahead[tid] = cpu->inRunahead(tid);
+
+    // If we signalled to ourself that we should perform an arch restore, do so now
+    if (timeBuffer->getWire(-1)->archRestore[tid])
+        cpu->restoreCheckpointState(tid);
+
+    // If waiting for minimum work to be completed, check if we're done
+    if (runaheadExitPolicy == REExitPolicy::MinimumWork &&
+        runaheadExitable[tid] && !exitRunahead[tid]) {
+        if (instsPseudoretired[tid] >= minRunaheadWork) {
+            DPRINTF(RunaheadCommit,
+                    "[tid:%i] Exiting runahead because minimum work has been done.\n",
+                    tid);
+            exitRunahead[tid] = true;
+            stats.runaheadExitCause[stats.REExitCause::MinWorkDone]++;
+        } else {
+            DPRINTF(RunaheadCommit,
+                    "[tid:%i] %llu/%llu insts pseudoretired towards runahead exit.\n",
+                    tid, instsPseudoretired[tid], minRunaheadWork);
+        }
+    }
+
+    // Check if we should stop counting runahead exit overhead cycles
+    if (!trackedIqEmpty && runaheadExitCycles != -1) {
+        // The IQ has filled with at least as many insts as were in there when runahead was entered
+        if (trackedIqInsts == 0) {
+            stats.runaheadExitOverhead.sample(runaheadExitCycles);
+            stats.totalRunaheadExitOverhead += runaheadExitCycles;
+            runaheadExitCycles = -1;
+        } else {
+            if (trackedIqSeqNum > 0 && !iewStage->instQueue.empty(tid)) {
+                // Find out how many insts have passed through the IQ since last time
+                size_t instPassthrough = iewStage->instQueue.getYoungestInst(tid)->seqNum - trackedIqSeqNum;
+                // prevent underflow
+                if (instPassthrough > trackedIqInsts)
+                    trackedIqInsts = 0;
+                else
+                    trackedIqInsts -= instPassthrough;
+            }
+
+            if (!iewStage->instQueue.empty(tid))
+                trackedIqSeqNum = iewStage->instQueue.getYoungestInst(tid)->seqNum;
         }
     }
 }

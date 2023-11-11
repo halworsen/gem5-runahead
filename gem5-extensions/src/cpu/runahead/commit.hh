@@ -430,6 +430,8 @@ class Commit
     /** Whether the IQ was empty when runahead was entered */
     bool trackedIqEmpty = true;
 
+    /** Update state and metrics related to runahead at the end of the cycle */
+    void updateRunaheadState(ThreadID tid);
 
     /**
      * Instruction passed to squashAfter().
