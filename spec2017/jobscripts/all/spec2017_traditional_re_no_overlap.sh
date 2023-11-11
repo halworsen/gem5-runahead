@@ -1,22 +1,39 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-300-stall-entry"
+#SBATCH --job-name="gem5-spec2017-bench-traditional-re-no-overlap"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
+#SBATCH --array=1-16
 #SBATCH --exclude=idun-02-45,idun-02-49
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4000
 #SBATCH --time=7-06:00:00
+#SBATCH --exclude=idun-02-45
 #SBATCH --signal=B:SIGINT@120
 
 #
 # Restore from a checkpoint then switch cores to the runahead CPU for simulation
 #
 
-declare -A CHECKPOINTS
+ALL_BENCHMARKS=(
+    "cactuBSSN_s_0"
+    "exchange2_s_0"
+    "fotonik3d_s_0"
+    "gcc_s_1" "gcc_s_2"
+    "imagick_s_0"
+    "mcf_s_0"
+    "nab_s_0"
+    "omnetpp_s_0"
+    "perlbench_s_0" "perlbench_s_1" "perlbench_s_2"
+    "wrf_s_0"
+    "x264_s_0"
+    "x264_s_2"
+    "xalancbmk_s_0"
+)
 
+declare -A CHECKPOINTS
 CHECKPOINTS=(
     ["perlbench_s_0"]="cpt_26723810289983_sp-1_interval-369_insts-36900000000_warmup-1000000"
     ["perlbench_s_1"]="cpt_33681194937967_sp-1_interval-462_insts-46200000000_warmup-1000000"
@@ -38,7 +55,7 @@ CHECKPOINTS=(
 
 SPEC2017_DIR=/cluster/home/markuswh/gem5-runahead/spec2017
 RUNSCRIPT_DIR="$SPEC2017_DIR/runscripts"
-BENCHMARK=$1
+BENCHMARK=${ALL_BENCHMARKS[$SLURM_ARRAY_TASK_ID - 1]}
 CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
 RUNSCRIPT="$RUNSCRIPT_DIR/$BENCHMARK.rcS"
 
@@ -75,6 +92,7 @@ pip freeze
 
 echo
 echo "job: simulate SPEC2017 benchmark at simpoint - $BENCHMARK"
+echo "node: $(hostname)"
 echo "time: $(date)"
 echo "--- start job ---"
 
@@ -91,7 +109,8 @@ FSPARAMS=(
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=300"
+    "--lll-latency-threshold=250"
+    # "--overlapping-runahead"
     "--runahead-exit-policy=Eager"
 
     # Cache & memory

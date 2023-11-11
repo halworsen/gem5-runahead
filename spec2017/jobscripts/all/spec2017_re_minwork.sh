@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-300-overlap"
+#SBATCH --job-name="gem5-spec2017-re-minwork"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -109,9 +109,12 @@ FSPARAMS=(
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=300"
-    "--overlapping-runahead"
-    "--runahead-exit-policy=Eager"
+    "--lll-latency-threshold=300" # cycles
+    # "--overlapping-runahead"
+    "--runahead-exit-policy=MinimumWork"
+    "--runahead-exit-deadline=200" # cycles
+    "--runahead-min-work=100" # insts
+    "--eager-entry"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"
