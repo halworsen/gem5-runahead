@@ -526,8 +526,31 @@ Fetch::lookupAndUpdateNextPC(const DynInstPtr &inst, PCStateBase &next_pc)
     }
 
     ThreadID tid = inst->threadNumber;
-    predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
-                                        next_pc, tid);
+    // Runahead insts do a lookup but do not update the predictor state
+    if (!inst->isRunahead()) {
+        predict_taken = branchPred->predict(inst->staticInst, inst->seqNum, next_pc, tid);
+    } else {
+        Addr instPc = next_pc.instAddr();
+
+        // Kind of manual branch prediction but it's alright
+        // The BP does not actually have access to this information at fetch but it is what the BP unit does, so...
+        if (inst->isUncondCtrl()) {
+            predict_taken = true;
+        } else {
+            void *bpHistory = NULL;
+            predict_taken = branchPred->lookup(tid, instPc, bpHistory);
+        }
+
+        // No access to the RAS, so we'll have to make do with just the BTB :(
+        if (predict_taken && branchPred->BTBValid(instPc)) {
+            std::unique_ptr<PCStateBase> target;
+            set(target, branchPred->BTBLookup(instPc));
+            set(next_pc, *target);
+        } else {
+            predict_taken = false;
+            inst->staticInst->advancePC(next_pc);
+        }
+    }
 
     if (predict_taken) {
         DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
@@ -968,18 +991,21 @@ Fetch::checkSignalsAndUpdate(ThreadID tid)
         // If it was a branch mispredict on a control instruction, update the
         // branch predictor with that instruction, otherwise just kill the
         // invalid state we generated in after sequence number
-        if (fromCommit->commitInfo[tid].mispredictInst &&
-            fromCommit->commitInfo[tid].mispredictInst->isControl()) {
-            branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
-                    *fromCommit->commitInfo[tid].pc,
-                    fromCommit->commitInfo[tid].branchTaken, tid);
-        } else {
-            branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
-                              tid);
-        }
+        if (!fromCommit->commitInfo[tid].mispredictInst ||
+            !fromCommit->commitInfo[tid].mispredictInst->isRunahead()) {
+            if (fromCommit->commitInfo[tid].mispredictInst &&
+                fromCommit->commitInfo[tid].mispredictInst->isControl()) {
+                branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
+                        *fromCommit->commitInfo[tid].pc,
+                        fromCommit->commitInfo[tid].branchTaken, tid);
+            } else {
+                branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
+                                tid);
+            }
+            }
 
         return true;
-    } else if (fromCommit->commitInfo[tid].doneSeqNum) {
+    } else if (fromCommit->commitInfo[tid].doneSeqNum && !cpu->inRunahead(tid)) {
         // Update the branch predictor if it wasn't a squashed instruction
         // that was broadcasted.
         branchPred->update(fromCommit->commitInfo[tid].doneSeqNum, tid);
@@ -991,13 +1017,16 @@ Fetch::checkSignalsAndUpdate(ThreadID tid)
                 "from decode.\n",tid);
 
         // Update the branch predictor.
-        if (fromDecode->decodeInfo[tid].branchMispredict) {
-            branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
-                    *fromDecode->decodeInfo[tid].nextPC,
-                    fromDecode->decodeInfo[tid].branchTaken, tid);
-        } else {
-            branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
-                              tid);
+        if (!fromDecode->decodeInfo[tid].mispredictInst ||
+            !fromDecode->decodeInfo[tid].mispredictInst->isRunahead()) {
+            if (fromDecode->decodeInfo[tid].branchMispredict) {
+                branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
+                        *fromDecode->decodeInfo[tid].nextPC,
+                        fromDecode->decodeInfo[tid].branchTaken, tid);
+            } else {
+                branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
+                                tid);
+            }
         }
 
         if (fetchStatus[tid] != Squashing) {
