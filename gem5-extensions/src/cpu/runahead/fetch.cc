@@ -537,15 +537,16 @@ Fetch::lookupAndUpdateNextPC(const DynInstPtr &inst, PCStateBase &next_pc)
         if (inst->isUncondCtrl()) {
             predict_taken = true;
         } else {
-            void *bpHistory = NULL;
-            predict_taken = branchPred->lookup(tid, instPc, bpHistory);
+            void *_discardBpHistory = NULL;
+            predict_taken = branchPred->lookup(tid, instPc, _discardBpHistory);
+            // Immediately undo the effect of the lookup and delete the history
+            if (_discardBpHistory != NULL)
+                branchPred->squash(tid, _discardBpHistory);
         }
 
         // No access to the RAS, so we'll have to make do with just the BTB :(
         if (predict_taken && branchPred->BTBValid(instPc)) {
-            std::unique_ptr<PCStateBase> target;
-            set(target, branchPred->BTBLookup(instPc));
-            set(next_pc, *target);
+            set(next_pc, *branchPred->BTBLookup(instPc));
         } else {
             predict_taken = false;
             inst->staticInst->advancePC(next_pc);
@@ -1002,7 +1003,7 @@ Fetch::checkSignalsAndUpdate(ThreadID tid)
                 branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
                                 tid);
             }
-            }
+        }
 
         return true;
     } else if (fromCommit->commitInfo[tid].doneSeqNum && !cpu->inRunahead(tid)) {
