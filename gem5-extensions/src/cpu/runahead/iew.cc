@@ -1261,7 +1261,7 @@ IEW::executeInsts()
         }
 
         // Most poisoned-on-arrival instructions do not need to execute
-        if (inst->isPoisoned() && !inst->isStore()) {
+        if (inst->isPoisoned() && (!inst->isStore() || inst->isNonSpeculative() || inst->isAtomic())) {
             DPRINTF(RunaheadIEW, "[sn:%llu] Instruction with PC %s was poisoned, %s.\n",
                                 inst->seqNum, inst->pcState(),
                                 inst->isStore() ? "not skipping because it is a store" : "skipping");
