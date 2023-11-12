@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-300-dbg"
+#SBATCH --job-name="gem5-spec2017-dbg"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -7,7 +7,7 @@
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=4000
+#SBATCH --mem=8000
 #SBATCH --time=7-06:00:00
 #SBATCH --signal=B:SIGINT@120
 
@@ -92,7 +92,7 @@ FSPARAMS=(
     "--lll-threshold=3"
     "--rcache-size=2kB"
     "--lll-latency-threshold=300"
-    "--overlapping-runahead"
+    # "--overlapping-runahead"
     "--runahead-exit-policy=Eager"
     "--eager-entry"
 

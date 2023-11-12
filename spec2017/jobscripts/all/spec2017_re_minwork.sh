@@ -8,7 +8,7 @@
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=4000
+#SBATCH --mem=6000
 #SBATCH --time=7-06:00:00
 #SBATCH --exclude=idun-02-45
 #SBATCH --signal=B:SIGINT@120
@@ -112,7 +112,7 @@ FSPARAMS=(
     "--lll-latency-threshold=300" # cycles
     # "--overlapping-runahead"
     "--runahead-exit-policy=MinimumWork"
-    "--runahead-exit-deadline=200" # cycles
+    "--runahead-exit-deadline=150" # cycles
     "--runahead-min-work=100" # insts
     "--eager-entry"
 

@@ -7,7 +7,7 @@
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=4000
+#SBATCH --mem=6000
 #SBATCH --time=7-06:00:00
 #SBATCH --signal=B:SIGINT@120
 
