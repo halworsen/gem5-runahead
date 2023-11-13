@@ -12,6 +12,10 @@ class IFTSensitivityREPeriods(Plotter):
     name = 'Runahead periods for different runahead IFTs'
     fname = 'ift_sensitivity_re_periods'
     description = 'Sensitivity analysis of IPC improvements relative to baseline with various LLL in-flight cycle thresholds'
+class IFTSensitivityREPeriods(Plotter):
+    name = 'Runahead periods for different runahead IFTs'
+    fname = 'ift_sensitivity_re_periods'
+    description = 'Sensitivity analysis of IPC improvements relative to baseline with various LLL in-flight cycle thresholds'
 
     log_dir = '/cluster/home/markuswh/gem5-runahead/spec2017/logs'
 
