@@ -648,7 +648,7 @@ CPU::tick()
             // increment stat
             lastRunningCycle = curCycle();
         } else if (!activityRec.active() || _status == Idle) {
-            DPRINTF(O3CPU, "Idle!\n");
+            DPRINTF(Activity, "Idle!\n");
             lastRunningCycle = curCycle();
             cpuStats.timesIdled++;
         } else {
@@ -1701,6 +1701,9 @@ CPU::runaheadLLLReturn(ThreadID tid)
     DPRINTF(RunaheadCPU, "[tid:%i] Signalling commit that runahead is safe to exit.\n", tid);
     const DynInstPtr &lll = runaheadCause[tid];
     commit.signalExitRunahead(tid, lll);
+
+    // Wake the CPU in case it was idling
+    wakeCPU();
 }
 
 void
