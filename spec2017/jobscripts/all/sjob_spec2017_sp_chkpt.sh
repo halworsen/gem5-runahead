@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-sp-chkpt-all"
+#SBATCH --job-name="spec2017-sp-chkpt-all"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -92,7 +92,7 @@ FSPARAMS=(
 
     # 100M inst simpoint interval
     "--simpoint-interval=100000000"
-    "--simpoint-checkpoints=$M5_OUT_DIR/../m5out-gem5-spec2017-simpoint/simpoint"
+    "--simpoint-checkpoints=$M5_OUT_DIR/../m5out-spec2017-simpoint/simpoint"
     # 1M inst warmup
     "--warmup-insts=1000000"
 

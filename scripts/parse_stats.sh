@@ -7,7 +7,7 @@ STATPARSE=${HOME}/gem5-runahead/scripts/stats/statdump.py
 
 for BENCH_DIR in $LOG_DIR/*; do
     BENCHMARK=$(basename $BENCH_DIR)
-    M5OUT="$BENCH_DIR/m5out-gem5-spec2017-bench-baseline-o3"
+    M5OUT="$BENCH_DIR/m5out-spec2017-o3-baseline"
     STATS="$M5OUT/stats.txt"
 
     if [[ ! -d "$M5OUT" ]]; then

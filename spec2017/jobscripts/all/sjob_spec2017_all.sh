@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-all"
+#SBATCH --job-name="spec2017-all"
 #SBATCH --account=ie-idi
 #SBATCH --mail-user=markus@halvorsenfamilien.com
 #SBATCH --mail-type=ALL

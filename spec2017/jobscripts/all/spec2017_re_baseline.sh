@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-re-baseline"
+#SBATCH --job-name="spec2017-re-baseline"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -104,7 +104,7 @@ FSPARAMS=(
     "--clock=3.2GHz"
 
     # Instantiate using the given checkpoint
-    "--restore-checkpoint=$M5_OUT_DIR/../m5out-gem5-spec2017-sp-chkpt-all/$CHECKPOINT"
+    "--restore-checkpoint=$M5_OUT_DIR/../m5out-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
     "--lll-threshold=3"

@@ -26,7 +26,7 @@ class IFTIPCReal(Plotter):
 
             # Read the baseline stats
             LOG.debug('\t reading baseline stats')
-            self.data[bench]['baseline'] = self.read_stats(bench, 'm5out-gem5-spec2017-bench-baseline-o3')
+            self.data[bench]['baseline'] = self.read_stats(bench, 'm5out-spec2017-o3-baseline')
 
             # Find all the In-Flight Threshold simulation outputs
             for run in self.experiments(bench):

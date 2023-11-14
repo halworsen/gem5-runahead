@@ -19,7 +19,7 @@ class SimPointWeights(Plotter):
                 continue
             self.data[bench_dir.name] = []
 
-            weights_path = os.path.join(bench_dir.path, 'm5out-gem5-spec2017-simpoint', 'simpoint', 'weights.txt')
+            weights_path = os.path.join(bench_dir.path, 'm5out-spec2017-simpoint', 'simpoint', 'weights.txt')
             with open(weights_path) as f:
                 weightings = [l.split() for l in f.readlines()]
                 for sp_weight in weightings:

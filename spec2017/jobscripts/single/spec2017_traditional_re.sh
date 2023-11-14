@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-spec2017-bench-traditional-re-ift-300-dbg"
+#SBATCH --job-name="spec2017-dbg"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -86,12 +86,12 @@ FSPARAMS=(
     "--clock=3.2GHz"
 
     # Instantiate using the given checkpoint
-    "--restore-checkpoint=$M5_OUT_DIR/../m5out-gem5-spec2017-sp-chkpt-all/$CHECKPOINT"
+    "--restore-checkpoint=$M5_OUT_DIR/../m5out-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=300"
+    "--lll-latency-threshold=350"
     "--overlapping-runahead"
     "--runahead-exit-policy=Eager"
     "--eager-entry"
@@ -125,6 +125,9 @@ echo "$PARAMS"
 echo
 
 ./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
+    --debug-flags=O3CPUAll,Runahead \
+    --debug-start=1844731027649 \
+    --debug-end=1844731127650 \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE
 

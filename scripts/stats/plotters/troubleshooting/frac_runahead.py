@@ -40,7 +40,7 @@ class IFTFracRunahead(Plotter):
             baseline_stats_path = os.path.join(
                 self.log_dir,
                 bench_dir.name,
-                'm5out-gem5-spec2017-bench-baseline-o3',
+                'm5out-spec2017-o3-baseline',
                 'gem5stats.json'
             )
             LOG.debug('\t reading baseline stats')

@@ -7,7 +7,7 @@ SIMPOINT=${HOME}/gem5-runahead/SimPoint.3.2/bin/simpoint
 
 for BENCH_DIR in $LOG_DIR/*; do
     BENCHMARK=$(basename $BENCH_DIR)
-    M5OUT="$BENCH_DIR/m5out-gem5-spec2017-simpoint"
+    M5OUT="$BENCH_DIR/m5out-spec2017-simpoint"
     SIMPOINT_BBV="$M5OUT/simpoint.bb.gz"
 
     if [[ ! -d "$M5OUT" ]]; then

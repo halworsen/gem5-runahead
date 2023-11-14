@@ -18,13 +18,13 @@ class OverlappingRE(Plotter):
             LOG.debug(f'reading data for benchmark: {bench}')
 
             # Read the baseline stats
-            self.data[bench]['baseline'] = self.read_stats(bench, 'm5out-gem5-spec2017-bench-baseline-o3')
+            self.data[bench]['baseline'] = self.read_stats(bench, 'm5out-spec2017-o3-baseline')
 
             # Read the overlap/no overlap stats
             LOG.debug(f'\t reading overlap stats')
-            self.data[bench]['Overlap'] = self.read_stats(bench, 'm5out-gem5-spec2017-bench-traditional-re-overlap')
+            self.data[bench]['Overlap'] = self.read_stats(bench, 'm5out-spec2017-traditional-re-overlap')
             LOG.debug(f'\t reading no overlap stats')
-            self.data[bench]['No overlap'] = self.read_stats(bench, 'm5out-gem5-spec2017-bench-traditional-re-no-overlap')
+            self.data[bench]['No overlap'] = self.read_stats(bench, 'm5out-spec2017-traditional-re-no-overlap')
 
     def construct_nipc_frame(self) -> None:
         frame = FrameConstructor.relative_frame(

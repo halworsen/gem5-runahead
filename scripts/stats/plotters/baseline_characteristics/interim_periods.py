@@ -5,13 +5,18 @@ import numpy as np
 import scipy
 
 
-class InterimPeriods(Plotter):
+class BaselineInterimPeriods(Plotter):
     name = 'Interim period lengths by retired instructions'
     fname = 'interim_periods'
     description = 'Histograms of interim period lengths for every benchmark'
 
     # Any bucket corresponding to >= this cycle count counts as an overflow
     overflow_limit = 150
+
+    def load_data(self) -> None:
+        self.data = {}
+        for bench in self.benchmarks():
+            self.data[bench] = self.read_stats(bench, 'm5out-spec2017-re-baseline')
 
     def extract_buckets(self, dist: dict) -> list[str]:
         dist_buckets = []
@@ -20,11 +25,6 @@ class InterimPeriods(Plotter):
                 dist_buckets.append(key)
         return dist_buckets
 
-    def load_data(self) -> None:
-        self.data = {}
-        for bench in self.benchmarks():
-            self.data[bench] = self.read_stats(bench, 'm5out-gem5-spec2017-re-baseline')
-    
     @staticmethod
     def frame_sort(series) -> Series:
         keys = []
@@ -37,7 +37,7 @@ class InterimPeriods(Plotter):
             else:
                 keys.append(int(x.split('-')[1]))
         return Series(keys)
-    
+
     def construct_frames(self) -> None:
         frame = DataFrame({
             'benchmark': [],
