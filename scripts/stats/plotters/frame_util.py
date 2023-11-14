@@ -4,7 +4,7 @@ from pandas import DataFrame
 import scipy
 import numpy as np
 
-def read_stat(data: dict, path: str, val_num: int = 0) -> Any:
+def read_stat(data: dict, path: str) -> Any:
     '''
     Read a single value at the given stat path in the given data.
     '''
@@ -14,8 +14,9 @@ def read_stat(data: dict, path: str, val_num: int = 0) -> Any:
         key = keys[0]
         val = val[key]
         keys = keys[1:]
-    val = val['values'][val_num]
+    val = tuple(val['values'])
     return val
+
 
 class FrameConstructor:
     stat = Plotter.stat
@@ -38,10 +39,10 @@ class FrameConstructor:
 
         # Compute the relative stats
         for bench, bench_data in data.items():
-            base_stat = read_stat(bench_data[relative_to], stat)
+            base_stat, *_ = read_stat(bench_data[relative_to], stat)
             all_experiments = sorted([exp for exp in bench_data.keys() if exp != relative_to])
             for experiment in all_experiments:
-                experiment_stat = read_stat(bench_data[experiment], stat)
+                experiment_stat, *_ = read_stat(bench_data[experiment], stat)
                 relative_stat = experiment_stat / base_stat
 
                 row = {'benchmark': bench, 'experiment': experiment, 'value': relative_stat}
@@ -70,7 +71,7 @@ class FrameConstructor:
             if exclude:
                 all_experiments = sorted([exp for exp in bench_data.keys() if exp not in exclude])
             for experiment in all_experiments:
-                val = read_stat(bench_data[experiment], stat)
+                val, *_ = read_stat(bench_data[experiment], stat)
                 row = {'benchmark': bench, 'experiment': experiment, 'value': val}
                 frame.loc[len(frame)] = row
 

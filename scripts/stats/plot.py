@@ -4,7 +4,7 @@ from plotters.sens_analysis.ift_ipc import IFTIPCReal
 from plotters.sens_analysis.overlapping_runahead import OverlappingRE
 from plotters.sens_analysis.eager_entry import EagerEntry
 
-from plotters.exit_policy.interim_retired import InterimRetiredInsts
+from plotters.baseline_characteristics.interim_periods import InterimPeriods
 
 from argparse import ArgumentParser
 from os import makedirs
@@ -19,9 +19,12 @@ ALL_PLOTS = [
     # SimPointWeights,
 
     # Sensitivity analysis
-    IFTIPCReal(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$'),
-    OverlappingRE(),
-    EagerEntry(),
+    # IFTIPCReal(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$'),
+    # OverlappingRE(),
+    # EagerEntry(),
+
+    # Runahead baseline model characteristics
+    InterimPeriods(),
 
     # Debug/troubleshooting plots
     # IFTIPC(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$'),
@@ -78,6 +81,6 @@ if __name__ == '__main__':
             plt.suptitle(plotter.name)
             path = os.path.join(opts.out, f'{plotter.fname}.png')
             plt.tight_layout()
-            plt.savefig(path, dpi=300)
+            plt.savefig(path, dpi=300, bbox_inches='tight')
         else:
             plotter.plot()

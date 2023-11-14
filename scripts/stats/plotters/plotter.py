@@ -57,7 +57,12 @@ class Plotter:
         path = os.path.join(self.log_dir, benchmark)
         return (d.name for d in os.scandir(path))
 
-    def stat(self, path: str, val_num: int = 0, data: dict = None) -> Any:
+    def stat(
+            self,
+            path: str,
+            read_values: bool = True,
+            data: dict = None,
+    ) -> Any:
         '''
         Read a single value at the given stat path in the given data.
         '''
@@ -70,7 +75,8 @@ class Plotter:
             key = keys[0]
             val = val[key]
             keys = keys[1:]
-        val = val['values'][val_num]
+        if read_values:
+            val = tuple(val['values'])
         return val
 
     def load_data(self) -> None:
