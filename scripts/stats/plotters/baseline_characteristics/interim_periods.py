@@ -6,7 +6,7 @@ import scipy
 
 
 class BaselineInterimPeriods(Plotter):
-    name = 'Interim period lengths by retired instructions'
+    name = 'Instructions retired by interim periods between runahead'
     fname = 'interim_periods'
     description = 'Histograms of interim period lengths for every benchmark'
 

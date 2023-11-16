@@ -4,7 +4,10 @@ from plotters.sens_analysis.ift_ipc import IFTIPCReal
 from plotters.sens_analysis.overlapping_runahead import OverlappingRE
 from plotters.sens_analysis.eager_entry import EagerEntry
 
-from plotters.baseline_characteristics.interim_periods import InterimPeriods
+from plotters.baseline_characteristics.interim_periods import BaselineInterimPeriods
+from plotters.baseline_characteristics.ipc import BaselineIPC, BaselineAdjustedIPC
+from plotters.baseline_characteristics.l2u import BaselineL2U
+from plotters.baseline_characteristics.overhead import BaselineRunaheadOverhead
 
 from argparse import ArgumentParser
 from os import makedirs
@@ -24,7 +27,11 @@ ALL_PLOTS = [
     # EagerEntry(),
 
     # Runahead baseline model characteristics
-    InterimPeriods(),
+    # BaselineInterimPeriods(),
+    # BaselineIPC(),
+    # BaselineAdjustedIPC(),
+    # BaselineL2U(),
+    # BaselineRunaheadOverhead(),
 
     # Debug/troubleshooting plots
     # IFTIPC(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$'),
