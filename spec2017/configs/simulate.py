@@ -81,14 +81,14 @@ def sim_fs_from_checkpoint(root, args):
         if sim_interval <= 0:
             break
 
-        print(f'Simulating for {sim_interval} ticks')
+        print(f'Simulating for {sim_interval} ticks @ {tick}')
         exit_event = m5.simulate(sim_interval)
         tick = m5.curTick()
         cause = exit_event.getCause()
 
         simstats = m5.stats.gem5stats.get_simstat(root).to_json()
         insts = int(simstats['system']['processor']['cores1']['core']['committedInsts']['0']['value'])
-        print(f'Simulated {insts - prev_insts} instructions in {tick - prev_tick} ticks - {cause}')
+        print(f'Simulated {insts - prev_insts} instructions in {tick - prev_tick} ticks - {cause} @ {tick}')
         print(f'Progress: {insts}/{args.max_insts} insts ({(insts/args.max_insts)*100:.2f}%)')
 
         if cause == 'a thread reached the max instruction count':

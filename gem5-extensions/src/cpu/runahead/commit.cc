@@ -59,6 +59,7 @@
 #include "cpu/timebuf.hh"
 #include "debug/Activity.hh"
 #include "debug/Commit.hh"
+#include "debug/CommitFaults.hh"
 #include "debug/RunaheadCommit.hh"
 #include "debug/CommitRate.hh"
 #include "debug/Drain.hh"
@@ -645,7 +646,7 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
                 if (runaheadCause[tid]->seqNum != causeSeqNum)
                     return;
 
-                DPRINTF(RunaheadCommit, "[tid:%i] Runahead was not exited, exiting now runahead due to deadline.", tid);
+                DPRINTF(RunaheadCommit, "[tid:%i] Runahead was not exited, exiting now runahead due to deadline.\n", tid);
                 exitRunahead[tid] = true;
                 stats.runaheadExitCause[stats.REExitCause::Deadline]++;
             },
@@ -905,9 +906,13 @@ Commit::handleInterrupt()
         return;
     }
 
+    bool runaheadHazard = (cpu->inRunahead(0) ||
+                           timeBuffer->getWire(0)->archRestore[0] ||
+                           timeBuffer->getWire(-1)->archRestore[0]);
+
     // Wait until all in flight instructions are finished before enterring
-    // the interrupt.
-    if (canHandleInterrupts && cpu->instList.empty()) {
+    // the interrupt. Runahead should not pose any hazards either.
+    if (canHandleInterrupts && !runaheadHazard && cpu->instList.empty()) {
         // Squash or record that I need to squash this cycle if
         // an interrupt needed to be handled.
         DPRINTF(Commit, "Interrupt detected.\n");
@@ -939,9 +944,10 @@ Commit::handleInterrupt()
         avoidQuiesceLiveLock = false;
     } else {
         DPRINTF(Commit, "Interrupt pending: instruction is %sin "
-                "flight, ROB is %sempty\n",
+                "flight, ROB is %sempty. Runahead hazard: %s\n",
                 canHandleInterrupts ? "not " : "",
-                cpu->instList.empty() ? "" : "not " );
+                cpu->instList.empty() ? "" : "not ",
+                runaheadHazard ? "yes" : "no");
     }
 }
 
@@ -953,7 +959,8 @@ Commit::propagateInterrupt()
     // Also don't propagate while in runahead or waiting for arch restores
     if (commitStatus[0] == TrapPending || interrupt || trapSquash[0] ||
         tcSquash[0] || drainImminent || cpu->inRunahead(0) ||
-        timeBuffer->getWire(-1)->archRestore[0])
+        timeBuffer->getWire(-1)->archRestore[0] ||
+        timeBuffer->getWire(0)->archRestore[0])
         return;
 
     // Process interrupts if interrupts are enabled, not in PAL
@@ -1206,6 +1213,9 @@ Commit::commitInsts()
 
         // If the ROB head isn't ready, investigate if it's a load we should run ahead of
         if (!rob->isHeadReady(commit_thread)) {
+            DPRINTF(Commit, "[tid:%i] [sn:%llu] Head of ROB is not ready to commit.\n",
+                    tid, head_inst->seqNum);
+
             // Must be a load with an in-flight memory request to cause runahead
             if (!head_inst->isLoad() || !head_inst->hasRequest()) {
                 break;
@@ -1564,9 +1574,9 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
         commitStatus[tid] = TrapPending;
 
-        DPRINTF(Commit,
-            "[tid:%i] [sn:%llu] Committing instruction with fault\n",
-            tid, head_inst->seqNum);
+        DPRINTF(CommitFaults,
+            "[tid:%i] [sn:%llu] Committing instruction with %s fault\n",
+            tid, head_inst->seqNum, inst_fault->name());
         if (head_inst->traceData) {
             // We ignore ReExecution "faults" here as they are not real
             // (architectural) faults but signal flush/replays.

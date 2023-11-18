@@ -70,6 +70,9 @@ if env['CONF']['TARGET_ISA'] != 'null':
     DebugFlag('RunaheadRegFile')
     DebugFlag('RunaheadROB')
     DebugFlag('RCache')
+    
+    # For debugging
+    DebugFlag('CommitFaults')
 
     CompoundFlag('Runahead', [
         'RunaheadCPU', 'RunaheadFetch', 'RunaheadRename',

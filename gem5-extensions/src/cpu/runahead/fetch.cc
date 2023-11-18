@@ -1376,7 +1376,7 @@ Fetch::fetch(bool &status_change)
         DPRINTF(Fetch, "[tid:%i] Done fetching, reached fetch bandwidth "
                 "for this cycle.\n", tid);
     } else if (blkOffset >= fetchBufferSize) {
-        DPRINTF(Fetch, "[tid:%i] Done fetching, reached the end of the"
+        DPRINTF(Fetch, "[tid:%i] Done fetching, reached the end of the "
                 "fetch buffer.\n", tid);
     }
 
