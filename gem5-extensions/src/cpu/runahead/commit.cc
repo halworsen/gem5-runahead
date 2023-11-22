@@ -649,6 +649,9 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
                 DPRINTF(RunaheadCommit, "[tid:%i] Runahead was not exited, exiting now runahead due to deadline.\n", tid);
                 exitRunahead[tid] = true;
                 stats.runaheadExitCause[stats.REExitCause::Deadline]++;
+
+                // Wake the CPU in case it started idling
+                cpu->wakeCPU();
             },
             "RunaheadExitDeadline", true, Event::CPU_Tick_Pri
         );
@@ -1593,7 +1596,8 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         }
 
         // Generate trap squash event.
-        generateTrapEvent(tid, inst_fault);
+        if (!head_inst->isRunahead())
+            generateTrapEvent(tid, inst_fault);
         return false;
     }
 
