@@ -136,6 +136,8 @@ Decode::DecodeStats::DecodeStats(CPU *cpu)
                "Number of times decode resolved a branch"),
       ADD_STAT(branchMispred, statistics::units::Count::get(),
                "Number of times decode detected a branch misprediction"),
+      ADD_STAT(realBranchMispred, statistics::units::Count::get(),
+               "Number of times decode detected a branch misprediction"),
       ADD_STAT(controlMispred, statistics::units::Count::get(),
                "Number of times decode detected an instruction incorrectly "
                "predicted as a control"),
@@ -151,6 +153,7 @@ Decode::DecodeStats::DecodeStats(CPU *cpu)
     squashCycles.prereq(squashCycles);
     branchResolved.prereq(branchResolved);
     branchMispred.prereq(branchMispred);
+    realBranchMispred.prereq(realBranchMispred);
     controlMispred.prereq(controlMispred);
     decodedInsts.prereq(decodedInsts);
     squashedInsts.prereq(squashedInsts);
@@ -718,6 +721,8 @@ Decode::decodeInsts(ThreadID tid)
             std::unique_ptr<PCStateBase> target = inst->branchTarget();
             if (*target != inst->readPredTarg()) {
                 ++stats.branchMispred;
+                if (!inst->isRunahead())
+                    ++stats.realBranchMispred;
 
                 // Might want to set some sort of boolean and just do
                 // a check at the end

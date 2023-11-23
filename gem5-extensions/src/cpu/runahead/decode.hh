@@ -312,6 +312,8 @@ class Decode
         statistics::Scalar branchResolved;
         /** Stat for number of times a branch mispredict is detected. */
         statistics::Scalar branchMispred;
+        /** Stat for number of times a real branch mispredict is detected. */
+        statistics::Scalar realBranchMispred;
         /** Stat for number of times decode detected a non-control instruction
          * incorrectly predicted as a branch.
          */
