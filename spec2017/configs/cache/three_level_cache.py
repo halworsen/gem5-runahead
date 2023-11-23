@@ -7,6 +7,7 @@ from gem5.components.cachehierarchies.classic.caches.l1icache import L1ICache
 from gem5.components.cachehierarchies.classic.caches.l2cache import L2Cache
 from gem5.components.cachehierarchies.classic.caches.mmu_cache import MMUCache
 from gem5.isas import ISA
+from m5.params import NULL
 from m5.objects import Port, SystemXBar, Cache, BasePrefetcher, L2XBar, BadAddr
 
 class L3Cache(Cache):
@@ -52,6 +53,7 @@ class ThreeLevelCacheHierarchy(
         l2_assoc: int,
         l3_size: str,
         l3_assoc: int,
+        remove_prefetchers: bool = False,
     ):
         super().__init__()
 
@@ -72,6 +74,8 @@ class ThreeLevelCacheHierarchy(
         self.l2_bus = L2XBar()
         # No L3 Xbar, L2 can directly interface with L3 since there is only 1 L2 cache
 
+        self._remove_prefetchers = remove_prefetchers
+
     def get_mem_side_port(self) -> Port:
         return self.membus.mem_side_ports
 
@@ -84,6 +88,12 @@ class ThreeLevelCacheHierarchy(
         self.l1i_cache = L1ICache(self._l1i_size, self._l1i_assoc, tag_latency=4, data_latency=4, response_latency=4)
         self.l2_cache = L2Cache(self._l2_size, self._l2_assoc, tag_latency=8, data_latency=8, response_latency=8)
         self.l3_cache = L3Cache(self._l3_size, self._l3_assoc, tag_latency=30, data_latency=30, response_latency=30)
+
+        if self._remove_prefetchers:
+            # Remove all prefetchers
+            all_caches = [self.l1d_cache, self.l1i_cache, self.l2_cache, self.l3_cache]
+            for cache in all_caches:
+                cache.prefetcher = NULL
 
         # ITLB Page walk caches
         self.iptw_cache = MMUCache(size='8KiB')

@@ -31,6 +31,7 @@ def add_core_args(parser):
     cpu_group.add_argument('--issue-width', default=4, type=int, help='Issue stage width')
     cpu_group.add_argument('--writeback-width', default=8, type=int, help='WB stage width')
     cpu_group.add_argument('--commit-width', default=8, type=int, help='Commit stage width')
+    cpu_group.add_argument('--squash-width', default=8, type=int, help='ROB squash width')
 
     cpu_group.add_argument('--iq-size', default=97, type=int, help='Issue queue entries')
     cpu_group.add_argument('--lq-size', default=64, type=int, help='Load queue entries')
@@ -126,6 +127,7 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
         sim_core.issueWidth = args.issue_width
         sim_core.wbWidth = args.writeback_width
         sim_core.commitWidth = args.commit_width
+        sim_core.squashWidth = args.squash_width
 
         sim_core.numROBEntries = args.rob_size
 
