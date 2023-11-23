@@ -1227,9 +1227,8 @@ Commit::commitInsts()
             ++stats.loadsAtROBHead;
 
             gem5::runahead::LSQ::LSQRequest *lsqRequest = head_inst->savedRequest;
-            // That request must not be completed
-            // This may be unnecessary? Load may be marked as ready when the request completes
-            if (lsqRequest == nullptr || lsqRequest->isComplete()) {
+            // That request must not be completed, and it must have been sent to memory
+            if (lsqRequest == nullptr || lsqRequest->isComplete() || !lsqRequest->isSent()) {
                 break;
             }
 
@@ -1237,7 +1236,8 @@ Commit::commitInsts()
                     "[tid:%i] In-flight load reached the head of the ROB during commit "
                     "[sn:%llu] (PC %s). Associated requests:\n",
                     tid, head_inst->seqNum, head_inst->pcState());
-
+            
+            bool allPktsMissed = true;
             // Can't use the stored depth on the inst because it is only updated when pkts respond
             for (int idx = 0; idx < lsqRequest->_reqs.size(); idx++) {
                 RequestPtr request = lsqRequest->req(idx);
@@ -1247,32 +1247,36 @@ Commit::commitInsts()
                     "[tid:%i] Request #%d hit at depth %d\n",
                     tid, idx+1, depth);
 
-                if (depth >= cpu->lllDepthThreshold) {
-                    ++stats.lllAtROBHead;
-
-                    // If not already in runahead, try to enter it
-                    // If in runahead, make sure the load isn't already poisoned (waiting to drain)
-                    bool enteredRunahead = false;
-                    if (!cpu->inRunahead(tid)) {
-                        enteredRunahead = cpu->enterRunahead(tid);
-                    } else if (!head_inst->isPoisoned()) {
-                        // If in runahead, immediately "complete" it to avoid blocking on it
-                        assert(head_inst->isRunahead());
-                        DPRINTF(RunaheadCommit,
-                                "[tid:%i] Load was a runahead LLL. Attempting to forge response.\n", tid);
-                        // Tell the CPU to deal with it. This is kinda ugly, LSQ should handle these
-                        cpu->handleRunaheadLLL(head_inst);
-                    }
-
-                    if (enteredRunahead) {
-                        // Record the amount of insts in the IQ (to track exit overhead later)
-                        trackedIqInsts = iewStage->instQueue.size(tid);
-                        trackedIqEmpty = iewStage->instQueue.empty(tid);
-                        // Start tracking runahead entry overhead
-                        runaheadEnterCycles = 0;
-                    }
-
+                if (depth < cpu->lllDepthThreshold) {
+                    allPktsMissed = false;
                     break;
+                }
+            }
+
+            // If all packets went far enough down the memory hierarchy, try to enter runahead
+            if (allPktsMissed) {
+                ++stats.lllAtROBHead;
+
+                // If not already in runahead, try to enter it
+                // If in runahead, make sure the load isn't already poisoned (waiting to drain)
+                bool enteredRunahead = false;
+                if (!cpu->inRunahead(tid)) {
+                    enteredRunahead = cpu->enterRunahead(tid);
+                } else if (!head_inst->isPoisoned()) {
+                    // If in runahead, immediately "complete" it to avoid blocking on it
+                    assert(head_inst->isRunahead());
+                    DPRINTF(RunaheadCommit,
+                            "[tid:%i] Load was a runahead LLL. Attempting to forge response.\n", tid);
+                    // Tell the CPU to deal with it. This is kinda ugly, LSQ should handle these
+                    cpu->handleRunaheadLLL(head_inst);
+                }
+
+                if (enteredRunahead) {
+                    // Record the amount of insts in the IQ (to track exit overhead later)
+                    trackedIqInsts = iewStage->instQueue.size(tid);
+                    trackedIqEmpty = iewStage->instQueue.empty(tid);
+                    // Start tracking runahead entry overhead
+                    runaheadEnterCycles = 0;
                 }
             }
 
