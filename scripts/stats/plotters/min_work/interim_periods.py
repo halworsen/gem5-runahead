@@ -5,9 +5,9 @@ import numpy as np
 import scipy
 
 
-class BaselineInterimPeriods(Plotter):
-    name = 'Instructions retired by interim periods between runahead'
-    fname = 'baseline/baseline_interim_periods'
+class MinWorkInterimPeriods(Plotter):
+    name = 'Instructions retired by interim periods between runahead (Min work model)'
+    fname = 'min_work/minimum_work_interim_periods'
     description = 'Histograms of interim period lengths for every benchmark'
 
     # Any bucket corresponding to >= this cycle count counts as an overflow
@@ -16,7 +16,7 @@ class BaselineInterimPeriods(Plotter):
     def load_data(self) -> None:
         self.data = {}
         for bench in self.benchmarks():
-            self.data[bench] = self.read_stats(bench, 'm5out-spec2017-re-baseline')
+            self.data[bench] = self.read_stats(bench, 'm5out-spec2017-re-minwork')
 
     def extract_buckets(self, dist: dict) -> list[str]:
         dist_buckets = []

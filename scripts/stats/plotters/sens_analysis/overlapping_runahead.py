@@ -8,7 +8,7 @@ LOG = logging.getLogger(__name__)
 
 class OverlappingRE(Plotter):
     name = 'Sensitivity analysis of overlapping runahead'
-    fname = 'overlapping_re_sensitivity'
+    fname = 'baseline_sensitivity/overlapping_re_sensitivity'
     description = 'Sensitivity analysis of NIPCs and pseudoretired insts relative to baseline with various LLL in-flight cycle thresholds'
 
     def load_data(self) -> None:

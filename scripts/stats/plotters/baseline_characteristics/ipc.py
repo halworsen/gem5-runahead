@@ -4,7 +4,7 @@ import seaborn as sbn
 
 class BaselineIPC(Plotter):
     name = 'Runahead baseline IPC'
-    fname = 'baseline_ipc'
+    fname = 'baseline/baseline_ipc'
     description = 'Runahead baseline model IPC compared against the stock O3CPU'
 
     def load_data(self) -> None:
@@ -112,7 +112,7 @@ class BaselineIPC(Plotter):
 
 class BaselineAdjustedIPC(BaselineIPC):
     name = 'Runahead baseline overhead-adjusted IPC'
-    fname = 'baseline_adjusted_ipc'
+    fname = 'baseline/baseline_adjusted_ipc'
     description = 'Overhead-adjusted IPC of the runahead baseline model compared to the stock O3CPU'
 
     def plot(self) -> None:

@@ -12,7 +12,7 @@ LOG = logging.getLogger(__name__)
 
 class IFTIPCReal(Plotter):
     name = 'Sensitivity analysis of runahead IFTs'
-    fname = 'ift_sensitivity_real'
+    fname = 'baseline_sensitivity/ift_sensitivity_real'
     description = 'Sensitivity analysis of NIPCs and pseudoretired insts relative to baseline with various LLL in-flight cycle thresholds'
 
     def __init__(self, m5out_pattern: str) -> None:

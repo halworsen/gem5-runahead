@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 class BaselineRunaheadOverhead(Plotter):
     name = 'Overhead of entering and exiting runahead'
-    fname = 'baseline_runahead_overhead'
+    fname = 'baseline/baseline_runahead_overhead'
     description = 'The cycle overhead of entering and exiting runahead for every benchmark'
 
     def load_data(self) -> None:
@@ -99,7 +99,7 @@ class BaselineRunaheadOverhead(Plotter):
             ax=ax,
         )
 
-        exit = sbn.barplot(
+        _ = sbn.barplot(
             self.exit_frame[self.exit_frame['bucket'] == 'total'],
             x='benchmark',
             y='value',
@@ -107,7 +107,7 @@ class BaselineRunaheadOverhead(Plotter):
             ax=ax,
         )
 
-        enter = sbn.barplot(
+        _ = sbn.barplot(
             self.enter_frame[self.enter_frame['bucket'] == 'total'],
             x='benchmark',
             y='value',

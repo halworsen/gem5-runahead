@@ -8,21 +8,26 @@ from plotters.baseline_characteristics.interim_periods import BaselineInterimPer
 from plotters.baseline_characteristics.ipc import BaselineIPC, BaselineAdjustedIPC
 from plotters.baseline_characteristics.l2u import BaselineL2U
 from plotters.baseline_characteristics.overhead import BaselineRunaheadOverhead
+from plotters.baseline_characteristics.runahead_time import BaselineRunaheadTime, BaselineRunaheadFraction, BaselineRunaheadCycleFraction
+
+from plotters.min_work.ipc import MinimumWorkSensitivityIPC, MinimumWorkIPC
+from plotters.min_work.interim_periods import MinWorkInterimPeriods
+from plotters.min_work.runahead_time import MinWorkRunaheadTime, MinWorkRunaheadFraction, MinWorkRunaheadCycleFraction, MinWorkRunaheadPeriods
+from plotters.min_work.l2u import MinWorkL2U
 
 from argparse import ArgumentParser
 from os import makedirs
 import os.path
 import logging
-import json
 
 import matplotlib.pyplot as plt
 
 ALL_PLOTS = [
     # Simpoints
-    # SimPointWeights,
+    # SimPointWeights(),
 
     # Sensitivity analysis
-    # IFTIPCReal(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$'),
+    # IFTIPCReal(r'^m5out\-spec2017\-traditional\-re\-ift\-(\d+)$'),
     # OverlappingRE(),
     # EagerEntry(),
 
@@ -32,25 +37,22 @@ ALL_PLOTS = [
     # BaselineAdjustedIPC(),
     # BaselineL2U(),
     # BaselineRunaheadOverhead(),
+    # BaselineRunaheadTime(),
+    # BaselineRunaheadFraction(),
+    # BaselineRunaheadCycleFraction(),
 
-    # Debug/troubleshooting plots
-    # IFTIPC(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$'),
-    # OverheadAdjustedIFTIPC(r'^m5out\-gem5\-spec2017\-bench\-traditional\-re\-ift\-(\d+)$'),
-    # L2UOverflows,
-    # CommitSquashCycles,
-    # MeanL2U,
-    # IFTIPCREPeriods,
-    # IFTFracRunahead,
-    # IFTBranchMispredicts,
-
-    # Investigation of exit policy
-    # InterimRetiredInsts,
-
-    # Other
-    # LoadToUse,
-    # InterimInsts,
-    # RECycles,
-    # TriggerInFlightCycles,
+    # Minimum work model
+    # MinimumWorkSensitivityIPC(
+    #     r'^m5out\-spec2017\-re\-minwork-(deadline)\-(\d+)$',
+    #     r'^m5out\-spec2017\-re\-minwork-(work)\-(\d+)$',
+    # ),
+    # MinimumWorkIPC(),
+    # MinWorkInterimPeriods(),
+    # MinWorkRunaheadTime(),
+    # MinWorkRunaheadFraction(),
+    # MinWorkRunaheadCycleFraction(),
+    # MinWorkRunaheadPeriods(),
+    MinWorkL2U(),
 ]
 
 logging.basicConfig(
@@ -87,6 +89,7 @@ if __name__ == '__main__':
             # Set super title and save the plot
             plt.suptitle(plotter.name)
             path = os.path.join(opts.out, f'{plotter.fname}.png')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             plt.tight_layout()
             plt.savefig(path, dpi=300, bbox_inches='tight')
         else:

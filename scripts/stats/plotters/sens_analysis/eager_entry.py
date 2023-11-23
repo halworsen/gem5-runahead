@@ -8,7 +8,7 @@ LOG = logging.getLogger(__name__)
 
 class EagerEntry(Plotter):
     name = 'Sensitivity analysis of eager entry into runahead'
-    fname = 'eager_entry_sensitivity'
+    fname = 'baseline_sensitivity/eager_entry_sensitivity'
     description = 'Sensitivity analysis of relative NIPC and pseudoretired insts relative to baseline for eager runahead entry'
 
     def load_data(self) -> None:
