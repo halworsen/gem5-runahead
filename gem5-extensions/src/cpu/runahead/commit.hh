@@ -400,8 +400,11 @@ class Commit
      */
     Cycles runaheadExitDeadline;
 
-    /** For the MinimumWork policy: minimum insts to pseduoretire */
-    int minRunaheadWork;
+    /** For the MinimumWork and DynamicDelayed policy: minimum insts to pseduoretire before exiting runahead */
+    int minRunaheadWork = 0;
+
+    /** For the DynamicDelayed policy: commit's confidence that the CPU is stutter-running ahead */
+    int runaheadStutterConfidence = 0;
 
     /** Records if a thread should exit runahead this cycle */
     bool exitRunahead[MaxThreads] = { false };

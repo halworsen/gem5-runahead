@@ -615,7 +615,8 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
                 tid);
         exitRunahead[tid] = true;
         stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
-    } else if (runaheadExitPolicy == REExitPolicy::MinimumWork) {
+    } else if (runaheadExitPolicy == REExitPolicy::MinimumWork ||
+               runaheadExitPolicy == REExitPolicy::DynamicDelayed) {
         if (instsPseudoretired[tid] >= minRunaheadWork) {
             DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead now because minimum work has been done.\n",
                 tid, minRunaheadWork);
@@ -625,8 +626,6 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
             DPRINTF(RunaheadCommit, "[tid:%i] %llu/%llu insts have been pseudoretired. Runahead will exit later.\n",
                     tid, instsPseudoretired[tid], minRunaheadWork);
         }
-    } else if (runaheadExitPolicy == REExitPolicy::DynamicDelayed) {
-        panic("dynamic delayed runahead exit is unimplemented!");
     }
 
     // If we aren't exiting immediately, schedule a deadline event
@@ -1277,6 +1276,25 @@ Commit::commitInsts()
                     trackedIqEmpty = iewStage->instQueue.empty(tid);
                     // Start tracking runahead entry overhead
                     runaheadEnterCycles = 0;
+
+                    if (runaheadExitPolicy == REExitPolicy::DynamicDelayed) {
+                        // Check the amount of interim insts. If it was very low, we may be stuttering
+                        // TODO: magic number
+                        if (instsBetweenRunahead[tid] <= 100) {
+                            runaheadStutterConfidence++;
+                        } else {
+                            runaheadStutterConfidence -= 2;
+                        }
+
+                        // Clamp the confidence
+                        else if (runaheadStutterConfidence < 0)
+                            runaheadStutterConfidence = 0;
+
+                        // TODO: magic number
+                        minRunaheadWork = 25 * runaheadStutterConfidence;
+                        DPRINTF(RunaheadCommit, "[tid:%i] Runahead stutter confidence: %i. Minimum work: %i insts",
+                                                tid, runaheadStutterConfidence, minRunaheadWork);
+                    }
                 }
             }
 
