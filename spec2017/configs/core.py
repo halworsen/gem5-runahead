@@ -13,6 +13,7 @@ def add_core_args(parser):
     cpu_group = parser.add_argument_group(title='CPU Parameters')
 
     cpu_group.add_argument('--no-runahead', action='store_false', dest='enable_runahead')
+    cpu_group.add_argument('--no-filtered-runahead', action='store_false', dest='filtered_runahead')
     cpu_group.add_argument('--lll-threshold', default=3, help='Memory depth at which a load is considered a LLL')
     cpu_group.add_argument('--rcache-size', default='2kB', help='Size of the runahead cache')
     cpu_group.add_argument('--runahead-exit-policy', default='Eager', help='Runahead exit policy')
@@ -21,7 +22,7 @@ def add_core_args(parser):
     cpu_group.add_argument('--lll-latency-threshold', default=100, help='Max load latency before runahead can no longer be entered')
     cpu_group.add_argument('--overlapping-runahead', action='store_true', dest='overlapping_runahead', help='Allow overlapping runahead periods')
     cpu_group.add_argument('--eager-entry', action='store_true', dest='eager_entry', help='Eagerly enter runahead as soon as a LLL makes it to the ROB head')
-    cpu_group.set_defaults(enable_runahead=True, overlapping_runahead=False, eager_entry=False)
+    cpu_group.set_defaults(enable_runahead=True, filtered_runahead=True, overlapping_runahead=False, eager_entry=False)
 
     cpu_group.add_argument('--rob-size', default=224, type=int, help='The amount of ROB entries')
 
@@ -111,6 +112,7 @@ def setup_runahead_processor(args) -> SimpleSwitchableProcessor:
 
         # Setup runahead parameters
         sim_core.enableRunahead = args.enable_runahead
+        sim_core.filteredRunahead = args.filtered_runahead
         sim_core.lllDepthThreshold = args.lll_threshold
         sim_core.runaheadCacheSize = args.rcache_size
         sim_core.runaheadInFlightThreshold = args.lll_latency_threshold

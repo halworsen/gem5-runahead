@@ -50,6 +50,7 @@
 #include "config/the_isa.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/runahead/dyn_inst_ptr.hh"
+#include "cpu/runahead/pc_pair.hh"
 #include "cpu/runahead/limits.hh"
 #include "cpu/reg_class.hh"
 #include "enums/SMTQueuePolicy.hh"
@@ -282,6 +283,9 @@ class ROB
      *  double checking that variable.
      */
     size_t countInsts(ThreadID tid);
+
+    /** Try to generate the dependency chain for a given instruction */
+    void generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer);
 
   private:
     /** Reset the ROB state */

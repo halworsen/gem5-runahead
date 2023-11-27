@@ -66,6 +66,7 @@
 #include "cpu/runahead/runahead_cache.hh"
 #include "cpu/runahead/scoreboard.hh"
 #include "cpu/runahead/thread_state.hh"
+#include "cpu/runahead/pc_pair.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
@@ -351,6 +352,9 @@ class CPU : public BaseCPU
      */
     ListIt addInst(const DynInstPtr &inst);
 
+    /** Remove an instruction from the instruction list */
+    void removeInst(const DynInstPtr &inst);
+
     /** Function to tell the CPU that an instruction has completed. */
     void instDone(ThreadID tid, const DynInstPtr &inst);
 
@@ -381,6 +385,9 @@ class CPU : public BaseCPU
 private:
     /** Whether or not runahead is enabled */
     bool runaheadEnabled;
+
+    /** Whether or not filtered runahead is enabled */
+    bool filteredRunahead;
 
     /** The in-flight threshold for runahead entry */
     Cycles runaheadInFlightThreshold;
@@ -423,6 +430,27 @@ public:
      * Returns true if runahead was entered.
      */
     bool enterRunahead(ThreadID tid);
+
+    /**
+     * PCs of instructions that should be executed by runahead. This acts as a filter for fetch.
+     * If the chain is not empty, insts that do not hit in this chain are discarded by fetch
+     */
+    std::vector<PCPair> runaheadChain;
+
+    /** Set the instruction chain to use for runahead */
+    void
+    setRunaheadChain(std::vector<PCPair> chain)
+    {
+        runaheadChain.clear();
+        for (std::vector<PCPair>::iterator it = chain.begin(); it != chain.end(); it++)
+            runaheadChain.push_back(*it);
+        
+        if (runaheadChain.size() > 0)
+            cpuStats.dependenceChainLength.sample(runaheadChain.size());
+    }
+
+    /** Whether or not the given PC is in the runahead chain */
+    bool inRunaheadChain(const DynInstPtr &inst);
 
     /**
      * Signal commit that the runahead-causing LLL has returned
@@ -665,6 +693,20 @@ public:
                 flags, res, std::move(amo_op), byte_enable);
     }
 
+    /** Check if there is a store in the SQ that has address range overlap with a given load inst */
+    bool
+    hasOverlappingStore(const DynInstPtr &loadInst)
+    {
+        return iew.ldstQueue.hasOverlappingStore(loadInst);
+    }
+
+    /** Try to find an in-flight store that has address overlap with a given load */
+    const DynInstPtr &
+    getOverlappingStore(const DynInstPtr &loadInst)
+    {
+        return iew.ldstQueue.getOverlappingStore(loadInst);
+    }
+
     /** Used by the fetch unit to get a hold of the instruction port. */
     Port &
     getInstPort() override
@@ -754,6 +796,9 @@ public:
         statistics::Distribution instsRetiredBetweenRunahead;
         // Histogram of cycles a load has been in-flight when it triggered runahead
         statistics::Histogram triggerLLLinFlightCycles;
+
+        // Distribution of dependence chain lengths
+        statistics::Distribution dependenceChainLength;
 
         // Amount of times an integer register was marked as poisoned
         statistics::Scalar intRegPoisoned;

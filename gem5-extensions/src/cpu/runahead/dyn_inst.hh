@@ -173,6 +173,7 @@ class DynInst : public ExecContext, public RefCounted
 
     enum Flags
     {
+        RemovePending,
         NotAnInst,
         TranslationStarted,
         TranslationCompleted,
@@ -389,6 +390,9 @@ class DynInst : public ExecContext, public RefCounted
     /** Whether or not the memory operation is done. */
     bool memOpDone() const { return instFlags[MemOpDone]; }
     void memOpDone(bool f) { instFlags[MemOpDone] = f; }
+
+    bool shouldRemove() const { return instFlags[RemovePending]; }
+    void removeFromCPU() { instFlags[RemovePending] = true; }
 
     bool notAnInst() const { return instFlags[NotAnInst]; }
     void setNotAnInst() { instFlags[NotAnInst] = true; }

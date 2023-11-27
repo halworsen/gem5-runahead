@@ -70,6 +70,7 @@ if env['CONF']['TARGET_ISA'] != 'null':
     DebugFlag('RunaheadRegFile')
     DebugFlag('RunaheadROB')
     DebugFlag('RCache')
+    DebugFlag('RunaheadChains')
     
     # For debugging
     DebugFlag('CommitFaults')
@@ -78,7 +79,7 @@ if env['CONF']['TARGET_ISA'] != 'null':
         'RunaheadCPU', 'RunaheadFetch', 'RunaheadRename',
         'RunaheadCheckpoint', 'RunaheadLSQ', 'RunaheadIQ',
         'RunaheadCommit', 'RunaheadIEW', 'RunaheadRegFile',
-        'RunaheadROB', 'RCache',
+        'RunaheadROB', 'RCache', 'RunaheadChains'
     ])
 
     SimObject('BaseRunaheadChecker.py', sim_objects=['BaseRunaheadChecker'])

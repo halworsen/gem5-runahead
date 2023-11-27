@@ -938,12 +938,20 @@ Fetch::tick()
         ThreadID tid = *tid_itr;
         if (!stalls[tid].decode && !fetchQueue[tid].empty()) {
             const auto& inst = fetchQueue[tid].front();
-            toDecode->insts[toDecode->size++] = inst;
-            DPRINTF(Fetch, "[tid:%i] [sn:%llu] Sending instruction to decode "
-                    "from fetch queue. Fetch queue size: %i.\n",
-                    tid, inst->seqNum, fetchQueue[tid].size());
 
-            wroteToTimeBuffer = true;
+            if (!cpu->inRunahead(inst->threadNumber) || cpu->inRunaheadChain(inst)) {
+                toDecode->insts[toDecode->size++] = inst;
+                DPRINTF(Fetch, "[tid:%i] [sn:%llu] Sending instruction to decode "
+                        "from fetch queue. Fetch queue size: %i.\n",
+                        tid, inst->seqNum, fetchQueue[tid].size());
+
+                wroteToTimeBuffer = true;
+            } else {
+                DPRINTF(RunaheadFetch, "[tid:%i] [sn:%llu] Inst was not in the runahead chain, discarding.\n",
+                        tid, inst->seqNum);
+                cpu->removeInst(inst);
+            }
+
             fetchQueue[tid].pop_front();
             insts_to_decode++;
             available_insts--;

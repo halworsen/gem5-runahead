@@ -164,6 +164,8 @@ class BaseRunaheadCPU(BaseCPU):
 
     enableRunahead = Param.Bool(True, 'Whether or not to use runahead execution')
 
+    filteredRunahead = Param.Bool(True, "Whether or not to filter the instruction stream to load chains")
+
     # 0 is L1, 1 is L2 and so on
     # This is more of a system/simulation parameter, really, but I'm trying to keep
     # runahead related things in the CPU

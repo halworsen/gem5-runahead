@@ -809,6 +809,11 @@ class LSQ
     /** Returns the total number of stores for a single thread. */
     int numStores(ThreadID tid);
 
+    /** Check if there is a store in the SQ that has address range overlap with a given load inst */
+    bool hasOverlappingStore(const DynInstPtr &loadInst);
+
+    /** Find a store that has address overlap with a given load */
+    const DynInstPtr &getOverlappingStore(const DynInstPtr &loadInst);
 
     // hardware transactional memory
 

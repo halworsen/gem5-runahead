@@ -40,6 +40,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <algorithm>
+
 #include "cpu/runahead/cpu.hh"
 
 #include "config/the_isa.hh"
@@ -80,6 +82,7 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
       threadExitEvent([this]{ exitThreads(); }, "RunaheadCPU exit threads",
                 false, Event::CPU_Exit_Pri),
       runaheadEnabled(params.enableRunahead),
+      filteredRunahead(params.filteredRunahead),
       runaheadInFlightThreshold(params.runaheadInFlightThreshold),
       allowOverlappingRunahead(params.allowOverlappingRunahead),
       lllDepthThreshold(params.lllDepthThreshold),
@@ -418,6 +421,8 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "Amount of instructions retired between runahead periods"),
       ADD_STAT(triggerLLLinFlightCycles, statistics::units::Cycle::get(),
                "Amount of cycles a load has been in-flight when it triggered runahead"),
+      ADD_STAT(dependenceChainLength, statistics::units::Count::get(),
+               "Amount of instructions in runahead dependence chains"),
       ADD_STAT(intRegPoisoned, statistics::units::Count::get(),
                "Amount of times an integer register was marked as poisoned"),
       ADD_STAT(intRegCured, statistics::units::Count::get(),
@@ -559,6 +564,10 @@ CPU::CPUStats::CPUStats(CPU *cpu)
 
     triggerLLLinFlightCycles
         .init(8)
+        .flags(statistics::total);
+
+    dependenceChainLength
+        .init(1, 64, 8)
         .flags(statistics::total);
 
     intRegPoisoned
@@ -1393,6 +1402,13 @@ CPU::addInst(const DynInstPtr &inst)
 }
 
 void
+CPU::removeInst(const DynInstPtr &inst)
+{
+    squashInstIt(inst->getInstListIt(), inst->threadNumber);
+    removeInstsThisCycle = true;
+}
+
+void
 CPU::instDone(ThreadID tid, const DynInstPtr &inst)
 {
     // Keep an instruction count.
@@ -1426,6 +1442,7 @@ CPU::removeFrontInst(const DynInstPtr &inst)
     removeInstsThisCycle = true;
 
     // Remove the front instruction.
+    inst->removeFromCPU();
     removeList.push(inst->getInstListIt());
 }
 
@@ -1513,6 +1530,7 @@ CPU::squashInstIt(const ListIt &instIt, ThreadID tid)
 
         // Mark it as squashed.
         (*instIt)->setSquashed();
+        (*instIt)->removeFromCPU();
 
         // @todo: Formulate a consistent method for deleting
         // instructions from the instruction list
@@ -1524,17 +1542,31 @@ CPU::squashInstIt(const ListIt &instIt, ThreadID tid)
 void
 CPU::cleanUpRemovedInsts()
 {
-    while (!removeList.empty()) {
-        DPRINTF(O3CPU, "Removing instruction, "
-                "[tid:%i] [sn:%lli] PC %s\n",
-                (*removeList.front())->threadNumber,
-                (*removeList.front())->seqNum,
-                (*removeList.front())->pcState());
-
-        instList.erase(removeList.front());
-
-        removeList.pop();
+    std::queue<ListIt> toRemove;
+    for (ListIt it = instList.begin(); it != instList.end(); it++) {
+        DynInstPtr inst = *it;
+        if (inst->shouldRemove())
+            toRemove.push(it);
     }
+
+    while (!toRemove.empty()) {
+        ListIt removeIt = toRemove.front();
+        toRemove.pop();
+
+        instList.erase(removeIt);
+    }
+
+    // while (!removeList.empty()) {
+    //     DPRINTF(O3CPU, "Removing instruction, "
+    //             "[tid:%i] [sn:%lli] PC %s\n",
+    //             (*removeList.front())->threadNumber,
+    //             (*removeList.front())->seqNum,
+    //             (*removeList.front())->pcState());
+
+    //     instList.erase(removeList.front());
+
+    //     removeList.pop();
+    // }
 
     removeInstsThisCycle = false;
 }
@@ -1688,11 +1720,30 @@ CPU::enterRunahead(ThreadID tid)
     // Poison the LLL and "execute" it so it can drain out.
     handleRunaheadLLL(robHead);
 
+    // Attempt to generate a load chain and place it in the CPU's buffer
+    if (filteredRunahead) {
+        std::vector<PCPair> loadChain;
+        rob.generateChainBuffer(robHead, loadChain);
+        setRunaheadChain(loadChain);
+    }
+
+    // Reset and record stats related stuff
     commit.instsPseudoretired[tid] = 0;
     runaheadEnteredTick = curTick();
     cpuStats.runaheadPeriods++;
 
     return true;
+}
+
+bool
+CPU::inRunaheadChain(const DynInstPtr &inst)
+{
+    // If there is no chain, every inst is "in the runahead chain"
+    if (runaheadChain.size() == 0)
+        return true;
+
+    const PCStateBase &pc = inst->pcState();
+    return (std::find(runaheadChain.begin(), runaheadChain.end(), pc) != runaheadChain.end());
 }
 
 void

@@ -210,6 +210,9 @@ class LSQUnit
     using LoadQueue = CircularQueue<LQEntry>;
     using StoreQueue = CircularQueue<SQEntry>;
 
+    typedef typename CircularQueue<LQEntry>::iterator LQIterator;
+    typedef typename CircularQueue<SQEntry>::iterator SQIterator;
+
   public:
     /** Constructs an LSQ unit. init() must be called prior to use. */
     LSQUnit(uint32_t lqEntries, uint32_t sqEntries);
@@ -306,6 +309,12 @@ class LSQUnit
     /** Returns the number of stores in the SQ. */
     int numStores() { return storeQueue.size(); }
 
+    /** Check if there is a store in the SQ that has address range overlap with a given load inst */
+    bool hasOverlappingStore(const DynInstPtr &loadInst);
+
+    /** Get a store that has address overlap with a given load */
+    const DynInstPtr &getOverlappingStore(const DynInstPtr &loadInst);
+
     // hardware transactional memory
     int numHtmStarts() const { return htmStarts; }
     int numHtmStops() const { return htmStops; }
@@ -379,6 +388,9 @@ class LSQUnit
 
     /** Handles completing the send of a store to memory. */
     void storePostSend();
+
+    /** Get the address range overlap/coverage between a request and a SQ entry */
+    AddrRangeCoverage getAddrRangeCoverage(LSQRequest *request, SQIterator storeIt);
 
   public:
     /** Attempts to send a packet to the cache.
@@ -591,10 +603,6 @@ class LSQUnit
 
     /** Returns whether or not the LSQ unit is stalled. */
     bool isStalled()  { return stalled; }
-
-  public:
-    typedef typename CircularQueue<LQEntry>::iterator LQIterator;
-    typedef typename CircularQueue<SQEntry>::iterator SQIterator;
 };
 
 } // namespace runahead

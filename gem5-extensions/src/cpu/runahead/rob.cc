@@ -41,6 +41,7 @@
 #include "cpu/runahead/rob.hh"
 
 #include <list>
+#include <algorithm>
 
 #include "base/logging.hh"
 #include "cpu/runahead/dyn_inst.hh"
@@ -48,6 +49,7 @@
 #include "debug/Fetch.hh"
 #include "debug/ROB.hh"
 #include "debug/RunaheadROB.hh"
+#include "debug/RunaheadChains.hh"
 #include "params/BaseRunaheadCPU.hh"
 
 namespace gem5
@@ -205,6 +207,170 @@ size_t
 ROB::countInsts(ThreadID tid)
 {
     return instList[tid].size();
+}
+
+void
+ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
+{
+    DPRINTF(RunaheadROB, "Attempting to generate dependence chain for sn:%llu\n",
+            inst->seqNum);
+    ThreadID tid = inst->threadNumber;
+    InstIt instPos = std::find(instList[tid].begin(), instList[tid].end(), inst);
+    if (instPos == instList[tid].end())
+        return;
+
+    // Try to find a younger copy of the inst in the ROB, starting at the inst directly after this one
+    // Without this, we cannot generate the chain immediately as the chain is not in the ROB
+    instPos++;
+    InstIt youngerPos = instList[tid].end();
+    for (InstIt it = instPos; it != instList[tid].end(); it++) {
+        if ((*it)->pcState() == inst->pcState()) {
+            youngerPos = it;
+            break;
+        }
+    }
+
+    // No younger copy, can't construct the chain
+    if (youngerPos == instList[tid].end()) {
+        DPRINTF(RunaheadROB, "Unable to find younger instance of inst. No chain generated.\n");
+        return;
+    } else {
+        DPRINTF(RunaheadROB, "Younger instance of inst found with sn:%llu\n",
+                (*youngerPos)->seqNum);
+    }
+
+    // For debug/analysis with the RunaheadChains debug flag
+    std::vector<std::string> _instChain;
+
+    // Source Register Search List
+    struct SRSLEntry {
+        PhysRegIdPtr srcReg;
+        // The ROB position to start looking for producers at
+        InstIt startIt;
+        SRSLEntry(PhysRegIdPtr reg, InstIt it) : srcReg(reg), startIt(it) {}
+    };
+    std::queue<SRSLEntry> srsl;
+
+    // Add the younger inst to the chain
+    buffer.emplace_back((*youngerPos)->pcState());
+    _instChain.push_back((*youngerPos)->staticInst->disassemble((*youngerPos)->pcState().instAddr()));
+    DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
+            (*youngerPos)->seqNum, buffer.size(),
+            (*youngerPos)->staticInst->disassemble((*youngerPos)->pcState().instAddr()));
+    // Add the younger inst's physical source registers to the SRSL
+    for (int i = 0; i < (*youngerPos)->numSrcRegs(); i++) {
+        PhysRegIdPtr reg = (*youngerPos)->renamedSrcIdx(i);
+        if (reg->classValue() == InvalidRegClass || reg->classValue() == MiscRegClass)
+            continue;
+        InstIt startIt = youngerPos;
+        startIt--;
+        srsl.emplace(reg, startIt);
+        DPRINTF(RunaheadROB, "Adding %s %i after sn:%llu to SRSL\n",
+                reg->className(), reg->index(),
+                (*startIt)->seqNum);
+    }
+
+    // Start constructing the dependence chain
+    while (!srsl.empty()) {
+        // Pop a source reg to look for in the ROB
+        SRSLEntry entry = srsl.front();
+        PhysRegIdPtr searchSrcReg = entry.srcReg;
+        InstIt startPos = entry.startIt;
+        srsl.pop();
+
+        DPRINTF(RunaheadROB, "SRSL size: %i. Attempting to find producers for %s %i, starting at sn:%llu...\n",
+                srsl.size(), searchSrcReg->className(), searchSrcReg->index(),
+                (*startPos)->seqNum);
+
+        // Then go from the start position towards the oldest instance looking for producers
+        for (InstIt it = startPos; it != instPos; it--) {
+            DynInstPtr inst = *it;
+
+            // Check if this inst produces the register
+            bool isProducer = false;
+            for (int i = 0; i < inst->numDestRegs(); i++) {
+                if (*inst->renamedDestIdx(i) == *searchSrcReg) {
+                    isProducer = true;
+                    break;
+                }
+            }
+
+            if (isProducer) {
+                DPRINTF(RunaheadROB, "sn:%llu is a producer!\n", inst->seqNum);
+
+                // If it was a producer, add it to the chain
+               if (std::find(buffer.begin(), buffer.end(), inst->pcState()) == buffer.end()) {
+                    buffer.emplace_back(inst->pcState());
+                    _instChain.push_back(inst->staticInst->disassemble(inst->pcState().instAddr()));
+                    DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
+                            inst->seqNum, buffer.size(),
+                            inst->staticInst->disassemble(inst->pcState().instAddr()));
+                } else {
+                    DPRINTF(RunaheadROB, "Inst was already in the chain, ignoring.\n");
+                    break;
+                }
+
+                // Then add its source regs to the SRSL
+                for (int i = 0; i < inst->numSrcRegs(); i++) {
+                    PhysRegIdPtr reg = inst->renamedSrcIdx(i);
+                    if (reg->classValue() == InvalidRegClass || reg->classValue() == MiscRegClass)
+                        continue;
+                    InstIt startIt = it;
+                    startIt--;
+                    srsl.emplace(reg, startIt);
+                    DPRINTF(RunaheadROB, "Adding %s %i after sn:%llu to SRSL\n",
+                            reg->className(), reg->index(),
+                            (*startIt)->seqNum);
+                }
+
+                // For loads: check the SQ for matching addresses
+                if (!inst->isLoad())
+                    break;
+
+                DPRINTF(RunaheadROB, "Inst was a load, searching SQ for overlapping stores.\n");
+                if (!cpu->hasOverlappingStore(inst))
+                    break;
+
+                // If there was one, add it to the chain and all of its regs to the SRSL
+                const DynInstPtr &prodStore = cpu->getOverlappingStore(inst);
+                DPRINTF(RunaheadROB, "sn:%llu is an overlapping store!\n", prodStore->seqNum);
+                for (int i = 0; i < prodStore->numSrcRegs(); i++) {
+                    PhysRegIdPtr reg = prodStore->renamedSrcIdx(i);
+                    if (reg->classValue() == InvalidRegClass || reg->classValue() == MiscRegClass)
+                        continue;
+                    InstIt startIt = std::find(instList[tid].begin(), instList[tid].end(), prodStore);
+                    startIt--;
+                    srsl.emplace(reg, startIt);
+                    DPRINTF(RunaheadROB, "Adding %s %i after sn:%llu to SRSL\n",
+                            reg->className(), reg->index(),
+                            (*startIt)->seqNum);
+                }
+
+                if (std::find(buffer.begin(), buffer.end(), prodStore->pcState()) == buffer.end()) {
+                    buffer.emplace_back(prodStore->pcState());
+                    _instChain.push_back(prodStore->staticInst->disassemble(prodStore->pcState().instAddr()));
+                    DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
+                            prodStore->seqNum, buffer.size(),
+                            prodStore->staticInst->disassemble(prodStore->pcState().instAddr()));
+                } else {
+                    DPRINTF(RunaheadROB, "Inst was already in the chain, ignoring.\n");
+                }
+
+                break;
+            }
+        }
+    }
+
+    DPRINTF(RunaheadROB, "Final dependence chain size: %i insts\n",
+            buffer.size());
+
+    if (buffer.size()) {
+        int i = 1;
+        std::vector<std::string>::reverse_iterator it = _instChain.rbegin();
+        for (; it != _instChain.rend(); it++) {
+            DPRINTF(RunaheadChains, "Chain entry #%i: %s\n", i++, *it);
+        }
+    }
 }
 
 void

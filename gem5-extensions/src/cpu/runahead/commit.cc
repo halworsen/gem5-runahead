@@ -214,6 +214,10 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "Total amount of cycles with LLLs at the ROB head"),
       ADD_STAT(instsPseudoretired, statistics::units::Count::get(),
                "Number of instructions committed in runahead"),
+      ADD_STAT(loadsPseudoretired, statistics::units::Count::get(),
+               "Number of loads committed in runahead"),
+      ADD_STAT(validLoadsPseudoretired, statistics::units::Count::get(),
+               "Number of valid loads committed in runahead"),
       ADD_STAT(commitPoisonedInsts, statistics::units::Count::get(),
                "Number of poisoned instructions retired by commit"),
       ADD_STAT(runaheadEnterOverhead, statistics::units::Cycle::get(),
@@ -298,6 +302,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
     instsPseudoretired
         .init(cpu->numThreads)
         .flags(total);
+    loadsPseudoretired.prereq(loadsPseudoretired);
+    validLoadsPseudoretired.prereq(loadsPseudoretired);
 
     runaheadEnterOverhead
         .init(5)
@@ -1283,11 +1289,11 @@ Commit::commitInsts()
                         if (instsBetweenRunahead[tid] <= 100) {
                             runaheadStutterConfidence++;
                         } else {
-                            runaheadStutterConfidence -= 2;
+                            runaheadStutterConfidence -= (instsBetweenRunahead[tid] / 50);
                         }
 
                         // Clamp the confidence
-                        else if (runaheadStutterConfidence < 0)
+                        if (runaheadStutterConfidence < 0)
                             runaheadStutterConfidence = 0;
 
                         // TODO: magic number
@@ -1845,6 +1851,14 @@ Commit::updateComInstStats(const DynInstPtr &inst)
     if (inst->isCall())
         stats.functionCalls[tid]++;
 
+    // Runahead
+    if (inst->isRunahead()) {
+        if (inst->isLoad()) {
+            stats.loadsPseudoretired++;
+            if (!inst->isPoisoned())
+                stats.validLoadsPseudoretired++;
+        }
+    }
 }
 
 ////////////////////////////////////////

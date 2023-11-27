@@ -356,6 +356,12 @@ class Commit
     /** The amount of instructions pseudoretired in the current runahead period */
     uint64_t instsPseudoretired[MaxThreads] = { 0 };
 
+    /** The amount of loads pseudoretired in the current runahead period */
+    uint64_t loadsPseudoretired[MaxThreads] = { 0 };
+
+    /** The amount of valid (not poisoned) loads pseudoretired in the current runahead period */
+    uint64_t validLoadsPseudoretired[MaxThreads] = { 0 }; 
+
     /** Instructions retired since last runahead exit and before earliest runahead entry */
     int instsBetweenRunahead[MaxThreads] = { 0 };
 
@@ -592,6 +598,10 @@ class Commit
         statistics::Scalar lllAtROBHead;
         /** Total number of instructions committed during runahead per thread */
         statistics::Vector instsPseudoretired;
+        /** The amount of loads pseudoretired in the current runahead period */
+        statistics::Scalar loadsPseudoretired;
+        /** The amount of valid (not poisoned) loads pseudoretired in the current runahead period */
+        statistics::Scalar validLoadsPseudoretired; 
         /** Total number of poisoned instructions retired by commit */
         statistics::Scalar commitPoisonedInsts;
 

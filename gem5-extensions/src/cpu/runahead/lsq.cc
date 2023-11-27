@@ -582,6 +582,18 @@ LSQ::numStores()
     return total;
 }
 
+bool
+LSQ::hasOverlappingStore(const DynInstPtr &loadInst)
+{
+    return thread[loadInst->threadNumber].hasOverlappingStore(loadInst);
+}
+
+const DynInstPtr &
+LSQ::getOverlappingStore(const DynInstPtr &loadInst)
+{
+    return thread[loadInst->threadNumber].getOverlappingStore(loadInst);
+}
+
 unsigned
 LSQ::numFreeLoadEntries()
 {

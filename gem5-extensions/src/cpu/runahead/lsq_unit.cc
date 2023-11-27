@@ -549,7 +549,45 @@ LSQUnit::numFreeStoreEntries()
                 storeQueue.capacity(), storeQueue.size());
         return storeQueue.capacity() - storeQueue.size();
 
- }
+}
+
+bool
+LSQUnit::hasOverlappingStore(const DynInstPtr &loadInst)
+{
+    if (storeQueue.size() == 0)
+        return false;
+
+    if (!loadInst->hasRequest())
+        return false;
+
+    LSQRequest *request = loadInst->savedRequest;
+    // Already finished and released, can't check
+    if (!request)
+        return false;
+
+    for (SQIterator it = storeQueue.begin(); it != storeQueue.end(); it++) {
+        AddrRangeCoverage coverage = getAddrRangeCoverage(request, it);
+        if (coverage != AddrRangeCoverage::NoAddrRangeCoverage) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+const DynInstPtr &
+LSQUnit::getOverlappingStore(const DynInstPtr &loadInst)
+{
+    LSQRequest *request = loadInst->savedRequest;
+    for (SQIterator it = storeQueue.begin(); it != storeQueue.end(); it++) {
+        AddrRangeCoverage coverage = getAddrRangeCoverage(request, it);
+        if (coverage != AddrRangeCoverage::NoAddrRangeCoverage) {
+            return it->instruction();
+        }
+    }
+
+    panic("make sure to check that there is an overlapping store first!");
+}
 
 void
 LSQUnit::checkSnoop(PacketPtr pkt)
@@ -1218,6 +1256,61 @@ LSQUnit::storePostSend()
     storeWBIt++;
 }
 
+LSQUnit::AddrRangeCoverage
+LSQUnit::getAddrRangeCoverage(LSQRequest *request, SQIterator storeIt)
+{
+    AddrRangeCoverage coverage = AddrRangeCoverage::NoAddrRangeCoverage;
+
+    int store_size = storeIt->size();
+
+    // Check if the store data is within the lower and upper bounds of
+    // addresses that the request needs.
+    auto req_s = request->mainReq()->getVaddr();
+    auto req_e = req_s + request->mainReq()->getSize();
+    auto st_s = storeIt->instruction()->effAddr;
+    auto st_e = st_s + store_size;
+
+    bool store_has_lower_limit = req_s >= st_s;
+    bool store_has_upper_limit = req_e <= st_e;
+    bool lower_load_has_store_part = req_s < st_e;
+    bool upper_load_has_store_part = req_e > st_s;
+
+    // If the store entry is not atomic (atomic does not have valid
+    // data), the store has all of the data needed, and
+    // the load is not LLSC, then
+    // we can forward data from the store to the load
+    if (!storeIt->instruction()->isAtomic() &&
+        store_has_lower_limit && store_has_upper_limit &&
+        !request->mainReq()->isLLSC()) {
+
+        const auto& store_req = storeIt->request()->mainReq();
+        coverage = store_req->isMasked() ?
+            AddrRangeCoverage::PartialAddrRangeCoverage :
+            AddrRangeCoverage::FullAddrRangeCoverage;
+    } else if (
+        // This is the partial store-load forwarding case where a store
+        // has only part of the load's data and the load isn't LLSC
+        (!request->mainReq()->isLLSC() &&
+         ((store_has_lower_limit && lower_load_has_store_part) ||
+          (store_has_upper_limit && upper_load_has_store_part) ||
+          (lower_load_has_store_part && upper_load_has_store_part))) ||
+        // The load is LLSC, and the store has all or part of the
+        // load's data
+        (request->mainReq()->isLLSC() &&
+         ((store_has_lower_limit || upper_load_has_store_part) &&
+          (store_has_upper_limit || lower_load_has_store_part))) ||
+        // The store entry is atomic and has all or part of the load's
+        // data
+        (storeIt->instruction()->isAtomic() &&
+         ((store_has_lower_limit || upper_load_has_store_part) &&
+          (store_has_upper_limit || lower_load_has_store_part)))) {
+
+        coverage = AddrRangeCoverage::PartialAddrRangeCoverage;
+    }
+
+    return coverage;
+}
+
 void
 LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
 {
@@ -1620,53 +1713,7 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
             !(store_it->instruction()->isRunahead() && !load_inst->isRunahead())) {
             assert(store_it->instruction()->effAddrValid());
 
-            // Check if the store data is within the lower and upper bounds of
-            // addresses that the request needs.
-            auto req_s = request->mainReq()->getVaddr();
-            auto req_e = req_s + request->mainReq()->getSize();
-            auto st_s = store_it->instruction()->effAddr;
-            auto st_e = st_s + store_size;
-
-            bool store_has_lower_limit = req_s >= st_s;
-            bool store_has_upper_limit = req_e <= st_e;
-            bool lower_load_has_store_part = req_s < st_e;
-            bool upper_load_has_store_part = req_e > st_s;
-
-            auto coverage = AddrRangeCoverage::NoAddrRangeCoverage;
-
-            // If the store entry is not atomic (atomic does not have valid
-            // data), the store has all of the data needed, and
-            // the load is not LLSC, then
-            // we can forward data from the store to the load
-            if (!store_it->instruction()->isAtomic() &&
-                store_has_lower_limit && store_has_upper_limit &&
-                !request->mainReq()->isLLSC()) {
-
-                const auto& store_req = store_it->request()->mainReq();
-                coverage = store_req->isMasked() ?
-                    AddrRangeCoverage::PartialAddrRangeCoverage :
-                    AddrRangeCoverage::FullAddrRangeCoverage;
-            } else if (
-                // This is the partial store-load forwarding case where a store
-                // has only part of the load's data and the load isn't LLSC
-                (!request->mainReq()->isLLSC() &&
-                 ((store_has_lower_limit && lower_load_has_store_part) ||
-                  (store_has_upper_limit && upper_load_has_store_part) ||
-                  (lower_load_has_store_part && upper_load_has_store_part))) ||
-                // The load is LLSC, and the store has all or part of the
-                // load's data
-                (request->mainReq()->isLLSC() &&
-                 ((store_has_lower_limit || upper_load_has_store_part) &&
-                  (store_has_upper_limit || lower_load_has_store_part))) ||
-                // The store entry is atomic and has all or part of the load's
-                // data
-                (store_it->instruction()->isAtomic() &&
-                 ((store_has_lower_limit || upper_load_has_store_part) &&
-                  (store_has_upper_limit || lower_load_has_store_part)))) {
-
-                coverage = AddrRangeCoverage::PartialAddrRangeCoverage;
-            }
-
+            AddrRangeCoverage coverage = getAddrRangeCoverage(request, store_it);
             if (coverage == AddrRangeCoverage::FullAddrRangeCoverage) {
                 // Get shift amount for offset into the store's data.
                 int shift_amt = request->mainReq()->getVaddr() -
