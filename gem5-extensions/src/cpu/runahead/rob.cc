@@ -388,6 +388,23 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer
     }
 }
 
+InstSeqNum
+ROB::findUnsentValidLoad(ThreadID tid)
+{
+    InstSeqNum youngest = 0;
+    for (InstIt it = instList[tid].begin(); it != instList[tid].end(); it++) {
+        DynInstPtr inst = *it;
+        if (!inst->isLoad())
+            continue;
+        if (inst->isPoisoned())
+            continue;
+        if (!inst->isExecuted())
+            youngest = inst->seqNum;
+    }
+
+    return youngest;
+}
+
 void
 ROB::insertInst(const DynInstPtr &inst)
 {

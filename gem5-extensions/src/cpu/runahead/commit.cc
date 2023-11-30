@@ -230,6 +230,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "Total amount of cycles spent exiting runahead"),
       ADD_STAT(totalRunaheadOverhead, statistics::units::Cycle::get(),
                "Total amount of cycles spent entering and exiting runahead"),
+      ADD_STAT(runaheadDelayedCycles, statistics::units::Cycle::get(),
+               "Number of runahead cycles in which it was safe to exit runahead"),
       ADD_STAT(runaheadExitCause, statistics::units::Count::get(),
                "Final cause for exiting runahead")
 {
@@ -314,6 +316,7 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
     totalRunaheadEnterOverhead.prereq(totalRunaheadEnterOverhead);
     totalRunaheadExitOverhead.prereq(totalRunaheadExitOverhead);
     totalRunaheadOverhead = totalRunaheadEnterOverhead + totalRunaheadExitOverhead;
+    runaheadDelayedCycles.prereq(runaheadDelayedCycles);
 
     runaheadExitCause
         .init(REExitCause::Deadline + 1)
@@ -621,8 +624,7 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
                 tid);
         exitRunahead[tid] = true;
         stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
-    } else if (runaheadExitPolicy == REExitPolicy::MinimumWork ||
-               runaheadExitPolicy == REExitPolicy::DynamicDelayed) {
+    } else if (runaheadExitPolicy == REExitPolicy::MinimumWork) {
         if (instsPseudoretired[tid] >= minRunaheadWork) {
             DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead now because minimum work has been done.\n",
                 tid, minRunaheadWork);
@@ -631,6 +633,21 @@ Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
         } else {
             DPRINTF(RunaheadCommit, "[tid:%i] %llu/%llu insts have been pseudoretired. Runahead will exit later.\n",
                     tid, instsPseudoretired[tid], minRunaheadWork);
+        }
+    } else if (runaheadExitPolicy == REExitPolicy::DynamicDelayed) {
+        DPRINTF(RunaheadCommit, "[tid:%i] Inspecting ROB for unsent loads.\n", tid);
+
+        InstSeqNum loadSn = rob->findUnsentValidLoad(tid);
+        if (loadSn) {
+            InstSeqNum instsToPseudoRetire = loadSn - rob->readHeadInst(tid)->seqNum;
+            DPRINTF(RunaheadCommit, "Youngest load in ROB has sn:%llu, which is %llu insts away.\n",
+                    loadSn, instsToPseudoRetire);
+            
+            runaheadExitSeqNum = loadSn;
+        } else {
+            DPRINTF(RunaheadCommit, "Unable to find any unsent loads, exiting ASAP.\n");
+            exitRunahead[tid] = true;
+            stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
         }
     }
 
@@ -889,7 +906,6 @@ Commit::tick()
     threads = activeThreads->begin();
     while (threads != end) {
         ThreadID tid = *threads++;
-
         updateRunaheadState(tid);
     }
 
@@ -1282,25 +1298,6 @@ Commit::commitInsts()
                     trackedIqEmpty = iewStage->instQueue.empty(tid);
                     // Start tracking runahead entry overhead
                     runaheadEnterCycles = 0;
-
-                    if (runaheadExitPolicy == REExitPolicy::DynamicDelayed) {
-                        // Check the amount of interim insts. If it was very low, we may be stuttering
-                        // TODO: magic number
-                        if (instsBetweenRunahead[tid] <= 100) {
-                            runaheadStutterConfidence++;
-                        } else {
-                            runaheadStutterConfidence -= (instsBetweenRunahead[tid] / 50);
-                        }
-
-                        // Clamp the confidence
-                        if (runaheadStutterConfidence < 0)
-                            runaheadStutterConfidence = 0;
-
-                        // TODO: magic number
-                        minRunaheadWork = 25 * runaheadStutterConfidence;
-                        DPRINTF(RunaheadCommit, "[tid:%i] Runahead stutter confidence: %i. Minimum work: %i insts",
-                                                tid, runaheadStutterConfidence, minRunaheadWork);
-                    }
                 }
             }
 
@@ -1761,6 +1758,43 @@ Commit::updateRunaheadState(ThreadID tid)
         }
     }
 
+    // If doing a dynamic delayed exit, check if the load has been executed
+    if (runaheadExitPolicy == REExitPolicy::DynamicDelayed &&
+        runaheadExitable[tid] && !exitRunahead[tid] &&
+        runaheadExitSeqNum) {
+        DynInstPtr loadInst = rob->findInst(tid, runaheadExitSeqNum);
+        // Could've been squashed or something
+        if (!loadInst) {
+            DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead because the exit-after load in the ROB disappeared.\n", tid);
+            exitRunahead[tid] = true;
+            stats.runaheadExitCause[stats.REExitCause::Dynamic]++;
+        } else if (loadInst->isExecuted()) {
+            DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead because the exit-after load was executed.\n", tid);
+            exitRunahead[tid] = true;
+            stats.runaheadExitCause[stats.REExitCause::Dynamic]++;
+        }
+
+        if (rob->countInsts(tid) > 0) {
+            // I don't think this should happen?
+            InstSeqNum oldestInst = rob->readHeadInst(tid)->seqNum;
+            if (oldestInst > runaheadExitSeqNum) {
+                DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead because the ROB head is too young.\n", tid);
+                exitRunahead[tid] = true;
+                stats.runaheadExitCause[stats.REExitCause::Dynamic]++;
+            }
+
+            if (!exitRunahead[tid]) {
+                InstSeqNum instsToExit = runaheadExitSeqNum - oldestInst;
+                DPRINTF(RunaheadCommit, "[tid:%i] Runahead will exit in %llu insts.\n", tid, instsToExit);
+            }
+        } else {
+            DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead because the ROB is empty", tid);
+            exitRunahead[tid] = true;
+            stats.runaheadExitCause[stats.REExitCause::Dynamic]++;
+        }
+    }
+
+
     // Check if we should stop counting runahead exit overhead cycles
     if (!trackedIqEmpty && runaheadExitCycles != -1) {
         // The IQ has filled with at least as many insts as were in there when runahead was entered
@@ -1783,6 +1817,9 @@ Commit::updateRunaheadState(ThreadID tid)
                 trackedIqSeqNum = iewStage->instQueue.getYoungestInst(tid)->seqNum;
         }
     }
+
+    if (runaheadExitable[tid])
+        stats.runaheadDelayedCycles++;
 }
 
 void

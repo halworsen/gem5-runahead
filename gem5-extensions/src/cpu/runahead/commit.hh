@@ -409,8 +409,8 @@ class Commit
     /** For the MinimumWork and DynamicDelayed policy: minimum insts to pseduoretire before exiting runahead */
     int minRunaheadWork = 0;
 
-    /** For the DynamicDelayed policy: commit's confidence that the CPU is stutter-running ahead */
-    int runaheadStutterConfidence = 0;
+    /** For the DynamicDelayed policy: seqnum to exit runahead at */
+    InstSeqNum runaheadExitSeqNum = 0;
 
     /** Records if a thread should exit runahead this cycle */
     bool exitRunahead[MaxThreads] = { false };
@@ -615,12 +615,15 @@ class Commit
         statistics::Scalar totalRunaheadExitOverhead;
         /** Total amount of cycles spent entering and exiting runahead */
         statistics::Formula totalRunaheadOverhead;
+        /** Number of runahead cycles in which it was safe to exit runahead */
+        statistics::Scalar runaheadDelayedCycles;
 
         /** Final cause for exiting runahead */
         statistics::Vector runaheadExitCause;
         enum REExitCause {
             EagerExit,
             MinWorkDone,
+            Dynamic,
             Deadline
         };
     } stats;

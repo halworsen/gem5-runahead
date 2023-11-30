@@ -288,6 +288,9 @@ class ROB
     /** Try to generate the dependency chain for a given instruction */
     void generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer);
 
+    /** Try to find the youngest valid, unsent load in the ROB. Returns 0 if there are none. */
+    InstSeqNum findUnsentValidLoad(ThreadID tid);
+
   private:
     /** Reset the ROB state */
     void resetState();
