@@ -1722,9 +1722,10 @@ CPU::enterRunahead(ThreadID tid)
 
     // Attempt to generate a load chain and place it in the CPU's buffer
     if (filteredRunahead) {
-        std::vector<PCPair> loadChain;
-        rob.generateChainBuffer(robHead, loadChain);
-        setRunaheadChain(loadChain);
+        runaheadChain.clear();
+        rob.generateChainBuffer(robHead, runaheadChain);
+        if (runaheadChain.size() > 0)
+            cpuStats.dependenceChainLength.sample(runaheadChain.size());
     }
 
     // Reset and record stats related stuff
@@ -1743,7 +1744,21 @@ CPU::inRunaheadChain(const DynInstPtr &inst)
         return true;
 
     const PCStateBase &pc = inst->pcState();
-    return (std::find(runaheadChain.begin(), runaheadChain.end(), pc) != runaheadChain.end());
+    for (ChainIt it = runaheadChain.begin(); it != runaheadChain.end(); it++) {
+        if (**it == pc)
+            return true;
+    }
+    return false;
+}
+
+bool
+CPU::isEndOfRunaheadChain(const PCStateBase &pc)
+{
+    if (runaheadChain.size() == 0)
+        return false;
+
+    std::vector<PCStatePtr>::iterator lastIt = --runaheadChain.end();
+    return (**lastIt == pc);
 }
 
 void

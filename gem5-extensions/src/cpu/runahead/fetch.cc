@@ -210,7 +210,13 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
              "Number of inst fetches per cycle",
              insts / cpu->baseStats.numCycles),
     ADD_STAT(runaheadInsts, statistics::units::Count::get(),
-             "Number of instructions fetched in runahead")
+             "Number of instructions fetched in runahead"),
+    ADD_STAT(discardedRunaheadInsts, statistics::units::Count::get(),
+             "Number of runahead insts discarded by fetch for not being part of the runahead chain"),
+    ADD_STAT(runaheadInstsToDecode, statistics::units::Count::get(),
+             "Number of insts that were sent to decode in runahead"),
+    ADD_STAT(runaheadChainLoops, statistics::units::Count::get(),
+             "Number of times fetch reset to the head of the runahead chain")
 {
         icacheStallCycles
             .prereq(icacheStallCycles);
@@ -261,6 +267,12 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
             .flags(statistics::total);
         runaheadInsts
             .prereq(runaheadInsts);
+        discardedRunaheadInsts
+            .prereq(discardedRunaheadInsts);
+        runaheadInstsToDecode
+            .prereq(runaheadInstsToDecode);
+        runaheadChainLoops
+            .prereq(runaheadChainLoops);
 }
 void
 Fetch::setTimeBuffer(TimeBuffer<TimeStruct> *time_buffer)
@@ -946,9 +958,13 @@ Fetch::tick()
                         tid, inst->seqNum, fetchQueue[tid].size());
 
                 wroteToTimeBuffer = true;
+
+                if (cpu->inRunahead(inst->threadNumber))
+                    fetchStats.runaheadInstsToDecode++;
             } else {
                 DPRINTF(RunaheadFetch, "[tid:%i] [sn:%llu] Inst was not in the runahead chain, discarding.\n",
                         tid, inst->seqNum);
+                fetchStats.discardedRunaheadInsts++;
                 cpu->removeInst(inst);
             }
 
@@ -1346,6 +1362,9 @@ Fetch::fetch(bool &status_change)
             if (predictedBranch) {
                 DPRINTF(Fetch, "Branch detected with PC = %s\n", this_pc);
             }
+
+            if (cpu->isEndOfRunaheadChain(this_pc))
+                fetchStats.runaheadChainLoops++;
 
             newMacro |= this_pc.instAddr() != next_pc->instAddr();
 

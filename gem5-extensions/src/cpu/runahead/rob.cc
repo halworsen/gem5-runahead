@@ -210,7 +210,7 @@ ROB::countInsts(ThreadID tid)
 }
 
 void
-ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
+ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer)
 {
     DPRINTF(RunaheadROB, "Attempting to generate dependence chain for sn:%llu\n",
             inst->seqNum);
@@ -252,7 +252,7 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
     std::queue<SRSLEntry> srsl;
 
     // Add the younger inst to the chain
-    buffer.emplace_back((*youngerPos)->pcState());
+    buffer.emplace_back((*youngerPos)->pcState().clone());
     _instChain.push_back((*youngerPos)->staticInst->disassemble((*youngerPos)->pcState().instAddr()));
     DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
             (*youngerPos)->seqNum, buffer.size(),
@@ -299,8 +299,12 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
                 DPRINTF(RunaheadROB, "sn:%llu is a producer!\n", inst->seqNum);
 
                 // If it was a producer, add it to the chain
-               if (std::find(buffer.begin(), buffer.end(), inst->pcState()) == buffer.end()) {
-                    buffer.emplace_back(inst->pcState());
+                bool inChain = std::find_if(
+                    buffer.begin(), buffer.end(),
+                    [inst](PCStatePtr &pc) { return pc->equals(inst->pcState()); }
+                ) == buffer.end();
+               if (inChain) {
+                    buffer.emplace_back(inst->pcState().clone());
                     _instChain.push_back(inst->staticInst->disassemble(inst->pcState().instAddr()));
                     DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
                             inst->seqNum, buffer.size(),
@@ -346,8 +350,12 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
                             (*startIt)->seqNum);
                 }
 
-                if (std::find(buffer.begin(), buffer.end(), prodStore->pcState()) == buffer.end()) {
-                    buffer.emplace_back(prodStore->pcState());
+                inChain = std::find_if(
+                    buffer.begin(), buffer.end(),
+                    [inst](PCStatePtr &pc) { return pc->equals(inst->pcState()); }
+                ) == buffer.end();
+                if (inChain) {
+                    buffer.emplace_back(prodStore->pcState().clone());
                     _instChain.push_back(prodStore->staticInst->disassemble(prodStore->pcState().instAddr()));
                     DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
                             prodStore->seqNum, buffer.size(),
@@ -361,7 +369,10 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
         }
     }
 
-    DPRINTF(RunaheadROB, "Final dependence chain size: %i insts\n",
+    // Reverse the order of the chain because we generated it back to front
+    std::reverse(buffer.begin(), buffer.end());
+
+    DPRINTF(RunaheadChains, "Final dependence chain size: %i insts\n",
             buffer.size());
 
     if (buffer.size()) {

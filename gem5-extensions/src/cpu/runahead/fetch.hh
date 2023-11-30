@@ -47,6 +47,7 @@
 #include "config/the_isa.hh"
 #include "cpu/runahead/comm.hh"
 #include "cpu/runahead/dyn_inst_ptr.hh"
+#include "cpu/runahead/pc_defs.hh"
 #include "cpu/runahead/limits.hh"
 #include "cpu/pc_event.hh"
 #include "cpu/pred/bpred_unit.hh"
@@ -592,6 +593,12 @@ class Fetch
 
         /** Number of runahead insts fetched */
         statistics::Scalar runaheadInsts;
+        /** Number of runahead insts discarded by fetch for not being part of the runahead chain */
+        statistics::Scalar discardedRunaheadInsts;
+        /** Number of insts that were sent to decode in runahead */
+        statistics::Scalar runaheadInstsToDecode;
+        /** Number of times fetch reset to the head of the runahead chain */
+        statistics::Scalar runaheadChainLoops;
     } fetchStats;
 };
 

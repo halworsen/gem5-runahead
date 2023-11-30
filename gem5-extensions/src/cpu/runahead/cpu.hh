@@ -66,7 +66,7 @@
 #include "cpu/runahead/runahead_cache.hh"
 #include "cpu/runahead/scoreboard.hh"
 #include "cpu/runahead/thread_state.hh"
-#include "cpu/runahead/pc_pair.hh"
+#include "cpu/runahead/pc_defs.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
@@ -432,27 +432,6 @@ public:
     bool enterRunahead(ThreadID tid);
 
     /**
-     * PCs of instructions that should be executed by runahead. This acts as a filter for fetch.
-     * If the chain is not empty, insts that do not hit in this chain are discarded by fetch
-     */
-    std::vector<PCPair> runaheadChain;
-
-    /** Set the instruction chain to use for runahead */
-    void
-    setRunaheadChain(std::vector<PCPair> chain)
-    {
-        runaheadChain.clear();
-        for (std::vector<PCPair>::iterator it = chain.begin(); it != chain.end(); it++)
-            runaheadChain.push_back(*it);
-        
-        if (runaheadChain.size() > 0)
-            cpuStats.dependenceChainLength.sample(runaheadChain.size());
-    }
-
-    /** Whether or not the given PC is in the runahead chain */
-    bool inRunaheadChain(const DynInstPtr &inst);
-
-    /**
      * Signal commit that the runahead-causing LLL has returned
      * Commit will handle the exit on the first coming cycle,
      * which may be the same or the next cycle, depending on exactly when the load returns
@@ -491,6 +470,27 @@ public:
 
     /** Mark/unmark a register as poisoned */
     void regPoisoned(PhysRegIdPtr reg, bool poisoned);
+
+    /**
+     * PCs of instructions that should be executed by runahead. This acts as a filter for fetch.
+     * If the chain is not empty, insts that do not hit in this chain are discarded by fetch
+     */
+    std::vector<PCStatePtr> runaheadChain;
+
+    /** Whether or not the given inst is in the runahead chain */
+    bool inRunaheadChain(const DynInstPtr &inst);
+
+    /** Whether or not the given PC is the last PC of the runahead chain */
+    bool isEndOfRunaheadChain(const PCStateBase &pc);
+
+    /** Whether or not there is an active runahead chain */
+    bool runaheadChainInUse(ThreadID tid) { return (inRunahead(tid) && runaheadChain.size() > 0); }
+
+    /** Get an iterator to the beginning of the runahead chain */
+    ChainIt runaheadChainBegin() { return runaheadChain.begin(); }
+
+    /** Get an iterator to the end of the runahead chain */
+    ChainIt runaheadChainEnd() { return runaheadChain.end(); }
 
     /** The tick at which runahead was last entered */
     Tick runaheadEnteredTick;
