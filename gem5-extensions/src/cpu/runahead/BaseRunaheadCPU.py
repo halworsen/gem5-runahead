@@ -164,7 +164,7 @@ class BaseRunaheadCPU(BaseCPU):
 
     enableRunahead = Param.Bool(True, 'Whether or not to use runahead execution')
 
-    filteredRunahead = Param.Bool(True, "Whether or not to filter the instruction stream to load chains")
+    filteredRunahead = Param.Bool(True, "Whether or not to filter the instruction stream to load chains in runahead")
 
     # 0 is L1, 1 is L2 and so on
     # This is more of a system/simulation parameter, really, but I'm trying to keep
@@ -173,7 +173,7 @@ class BaseRunaheadCPU(BaseCPU):
 
     runaheadCacheSize = Param.MemorySize('2kB', "Runahead cache capacity")
 
-    runaheadEagerEntry = Param.Bool(False, 'Enter runahead immediately on LLL detection (True) or wait for full ROB (False)?')
+    runaheadEagerEntry = Param.Bool(True, 'Enter runahead immediately on LLL detection (True) or wait for full ROB (False)?')
 
     runaheadExitPolicy = Param.String('Eager', 'Runahead exit policy. Must be one of: "Eager", "MinimumWork", "DynamicDelayed"')
     runaheadExitDeadline = Param.Cycles(250, 'All runahead is forced to exit within this amount of cycles.')
