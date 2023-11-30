@@ -286,6 +286,10 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer
         for (InstIt it = startPos; it != instPos; it--) {
             DynInstPtr inst = *it;
 
+            // Control insts do not go in the chain
+            if (inst->isControl())
+                continue;
+
             // Check if this inst produces the register
             bool isProducer = false;
             for (int i = 0; i < inst->numDestRegs(); i++) {
