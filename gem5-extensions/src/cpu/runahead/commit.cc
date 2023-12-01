@@ -1553,7 +1553,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
                 tid, head_inst->seqNum, head_inst->pcState(), inst_fault->name(),
                 head_inst->isRunahead(), head_inst->isPoisoned());
 
-        if (iewStage->hasStoresToWB(tid) || inst_num > 0) {
+        if (!head_inst->isRunahead() && (iewStage->hasStoresToWB(tid) || inst_num > 0)) {
             DPRINTF(Commit,
                     "[tid:%i] [sn:%llu] "
                     "Stores outstanding, fault must wait.\n",
@@ -1572,16 +1572,16 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
         assert(!thread[tid]->noSquashFromTC);
 
-        // Mark that we're in state update mode so that the trap's
-        // execution doesn't generate extra squashes.
-        thread[tid]->noSquashFromTC = true;
-
         /**
          * All runahead faults are ignored. The problem isn't "architecturally real",
          * and if it was a syscall, we definitely don't want it to execute speculatively.
          * The trap squash will still happen, but the trap itself does not execute
         */ 
         if (!head_inst->isRunahead()) {
+            // Mark that we're in state update mode so that the trap's
+            // execution doesn't generate extra squashes.
+            thread[tid]->noSquashFromTC = true;
+
             // Execute the trap.  Although it's slightly unrealistic in
             // terms of timing (as it doesn't wait for the full timing of
             // the trap event to complete before updating state), it's
@@ -1591,16 +1591,17 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
             cpu->trap(inst_fault, tid,
                     head_inst->notAnInst() ? nullStaticInstPtr :
                         head_inst->staticInst);
+
+            // Exit state update mode to avoid accidental updating.
+            thread[tid]->noSquashFromTC = false;
+
+            commitStatus[tid] = TrapPending;
         } else {
             DPRINTF(RunaheadCommit,
                     "[tid:%i] [sn:%llu] %s fault ignored, inst is runahead\n",
                     tid, head_inst->seqNum, inst_fault->name());
+            head_inst->setPoisoned();
         }
-
-        // Exit state update mode to avoid accidental updating.
-        thread[tid]->noSquashFromTC = false;
-
-        commitStatus[tid] = TrapPending;
 
         DPRINTF(CommitFaults,
             "[tid:%i] [sn:%llu] Committing instruction with %s fault\n",
