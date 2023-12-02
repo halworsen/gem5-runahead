@@ -109,7 +109,7 @@ CPU::CPU(const BaseRunaheadCPUParams &params)
       rob(this, params),
 
       // TODO? revisit RE cache block size (parametrize)
-      runaheadCache(name() + ".rcache", this, params.runaheadCacheSize, 8),
+      runaheadCache(name() + ".rcache", this, params.runaheadCacheSize, 64),
 
       scoreboard(name() + ".scoreboard", regFile.totalNumPhysRegs()),
 
@@ -1722,6 +1722,9 @@ CPU::enterRunahead(ThreadID tid)
 
     // Attempt to generate a load chain and place it in the CPU's buffer
     if (filteredRunahead) {
+        // Free the existing chain
+        for (auto it = runaheadChain.begin(); it != runaheadChain.end(); it++)
+            delete (*it);
         runaheadChain.clear();
         rob.generateChainBuffer(robHead, runaheadChain);
         if (runaheadChain.size() > 0)
