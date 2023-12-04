@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="spec2017-re-minwork"
+#SBATCH --job-name="spec2017-re-minwork-deadline-50"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -112,8 +112,8 @@ FSPARAMS=(
     "--lll-latency-threshold=300" # cycles
     # "--overlapping-runahead"
     "--runahead-exit-policy=MinimumWork"
-    "--runahead-exit-deadline=200" # cycles
-    "--runahead-min-work=100" # insts
+    "--runahead-exit-deadline=25" # cycles
+    "--runahead-min-work=25" # insts
     "--eager-entry"
 
     # Cache & memory

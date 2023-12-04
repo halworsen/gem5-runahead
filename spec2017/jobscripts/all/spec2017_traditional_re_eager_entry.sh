@@ -113,6 +113,7 @@ FSPARAMS=(
     # "--overlapping-runahead"
     "--runahead-exit-policy=Eager"
     "--eager-entry"
+    "--no-filtered-runahead"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"

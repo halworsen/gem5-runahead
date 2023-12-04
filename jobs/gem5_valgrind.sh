@@ -42,7 +42,7 @@ echo "job: test run of gem5 (SE mode) - $SIZE x $SIZE matrix multiplication"
 echo "time: $(date)"
 echo "--- start job ---"
 
-valgrind --leak-check=yes --suppressions=./gem5/util/valgrind-suppressions \
+valgrind --leak-check=yes --track-origins=yes --suppressions=./gem5/util/valgrind-suppressions \
     ./gem5/build/X86/gem5.opt \
     --outdir $M5_OUT_DIR \
     $TEST_SCRIPT --size=$SIZE --random=1 \

@@ -7,7 +7,7 @@
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=4000
+#SBATCH --mem=5000
 #SBATCH --time=7-06:00:00
 #SBATCH --signal=B:SIGINT@120
 
@@ -90,9 +90,8 @@ FSPARAMS=(
 
     # Runahead options
     "--lll-threshold=3"
-    "--rcache-size=2kB"
-    "--lll-latency-threshold=350"
-    "--overlapping-runahead"
+    "--rcache-size=8kB"
+    "--lll-latency-threshold=300"
     "--runahead-exit-policy=Eager"
     "--eager-entry"
 
@@ -125,9 +124,6 @@ echo "$PARAMS"
 echo
 
 ./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
-    --debug-flags=O3CPUAll,Runahead \
-    --debug-start=1844731027649 \
-    --debug-end=1844731127650 \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE
 

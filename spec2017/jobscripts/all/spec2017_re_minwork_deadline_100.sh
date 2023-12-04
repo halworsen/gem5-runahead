@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="spec2017-traditional-re-ift-100"
+#SBATCH --job-name="spec2017-re-minwork-deadline-100"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
@@ -8,7 +8,7 @@
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=5000
+#SBATCH --mem=4000
 #SBATCH --time=7-06:00:00
 #SBATCH --exclude=idun-02-45
 #SBATCH --signal=B:SIGINT@120
@@ -109,9 +109,11 @@ FSPARAMS=(
     # Runahead options
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=100"
-    "--overlapping-runahead"
-    "--runahead-exit-policy=Eager"
+    "--lll-latency-threshold=300" # cycles
+    # "--overlapping-runahead"
+    "--runahead-exit-policy=MinimumWork"
+    "--runahead-exit-deadline=100" # cycles
+    "--runahead-min-work=1000000" # insts
     "--eager-entry"
 
     # Cache & memory
@@ -120,7 +122,6 @@ FSPARAMS=(
     "--l2-size=256kB" "--l2-assoc=8"
     "--l3-size=6MB" "--l3-assoc=12"
     "--mem-size=3GB"
-    "--no-filtered-runahead"
 
     # Pipeline stage widths
     "--fetch-width=4" "--decode-width=4" "--rename-width=4"

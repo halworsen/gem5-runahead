@@ -30,7 +30,7 @@ CHECKPOINTS=(
     ["fotonik3d_s_0"]="cpt_35309091816902_sp-0_interval-473_insts-47300000000_warmup-1000000"
 )
 
-BENCHMARK="gcc_s_1"
+BENCHMARK="xalancbmk_s_0"
 CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
 SPEC2017_DIR="/cluster/home/markuswh/gem5-runahead/spec2017"
 RUNSCRIPT_DIR="$SPEC2017_DIR/runscripts"
@@ -65,7 +65,7 @@ fi
 
 # Params if running the matrix multiplication test program
 TEST_PARAMS=(
-    "--size=2"
+    "--size=8"
     "--random=1"
 )
 
@@ -78,14 +78,16 @@ SPEC_PARAMS=(
     "--clock=3.2GHz"
 
     # Instantiate using the given checkpoint
-    "--restore-checkpoint=$SPEC2017_DIR/logs/$BENCHMARK/m5out-gem5-spec2017-sp-chkpt-all/$CHECKPOINT"
+    "--restore-checkpoint=$SPEC2017_DIR/logs/$BENCHMARK/m5out-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
-    "--no-runahead"
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=100"
+    "--lll-latency-threshold=250"
+    "--overlapping-runahead"
     "--runahead-exit-policy=Eager"
+    "--eager-entry"
+    "--no-filtered-runahead"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"
@@ -150,7 +152,7 @@ echo "--- start job ---"
 # use schedBreak(<tick>) when connected to target
 GDBSERVER=$HOME/gdb-13.2/gdbserver/gdbserver
 $GDBSERVER localhost:34617 \
-    ./gem5/build/X86/gem5.debug --debug-break=17047282257225 \
+    ./gem5/build/X86/gem5.debug \
     --outdir $M5_OUT_DIR \
     $CONFIG_SCRIPT $CONFIG_PARAMS \
     > $SIMOUT_FILE

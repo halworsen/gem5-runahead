@@ -44,5 +44,6 @@ echo "time: $(date)"
 echo "--- start job ---"
 
 ./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
-    $TEST_SCRIPT --size=$SIZE --random=$RANDOM --no-l3 \
+    --debug-flags=RunaheadChains \
+    $TEST_SCRIPT --size=$SIZE --random=$RANDOM \
     > $SIMOUT_FILE

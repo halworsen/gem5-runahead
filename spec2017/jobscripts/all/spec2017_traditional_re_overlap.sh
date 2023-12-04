@@ -112,6 +112,7 @@ FSPARAMS=(
     "--lll-latency-threshold=250"
     "--overlapping-runahead"
     "--runahead-exit-policy=Eager"
+    "--no-filtered-runahead"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"
