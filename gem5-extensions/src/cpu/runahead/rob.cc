@@ -210,7 +210,7 @@ ROB::countInsts(ThreadID tid)
 }
 
 void
-ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer)
+ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
 {
     DPRINTF(RunaheadROB, "Attempting to generate dependence chain for sn:%llu\n",
             inst->seqNum);
@@ -252,7 +252,7 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer
     std::queue<SRSLEntry> srsl;
 
     // Add the younger inst to the chain
-    buffer.emplace_back((*youngerPos)->pcState().clone());
+    buffer.emplace_back((*youngerPos)->pcState());
     _instChain.push_back((*youngerPos)->staticInst->disassemble((*youngerPos)->pcState().instAddr()));
     DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
             (*youngerPos)->seqNum, buffer.size(),
@@ -303,12 +303,9 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer
                 DPRINTF(RunaheadROB, "sn:%llu is a producer!\n", inst->seqNum);
 
                 // If it was a producer, add it to the chain
-                bool inChain = std::find_if(
-                    buffer.begin(), buffer.end(),
-                    [inst](PCStatePtr &pc) { return pc->equals(inst->pcState()); }
-                ) == buffer.end();
+                bool inChain = std::find(buffer.begin(), buffer.end(), inst->pcState()) == buffer.end();
                if (inChain) {
-                    buffer.emplace_back(inst->pcState().clone());
+                    buffer.emplace_back(inst->pcState());
                     _instChain.push_back(inst->staticInst->disassemble(inst->pcState().instAddr()));
                     DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
                             inst->seqNum, buffer.size(),
@@ -354,12 +351,9 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCStatePtr> &buffer
                             (*startIt)->seqNum);
                 }
 
-                inChain = std::find_if(
-                    buffer.begin(), buffer.end(),
-                    [inst](PCStatePtr &pc) { return pc->equals(inst->pcState()); }
-                ) == buffer.end();
+                inChain = std::find(buffer.begin(), buffer.end(), prodStore->pcState()) == buffer.end();
                 if (inChain) {
-                    buffer.emplace_back(prodStore->pcState().clone());
+                    buffer.emplace_back(prodStore->pcState());
                     _instChain.push_back(prodStore->staticInst->disassemble(prodStore->pcState().instAddr()));
                     DPRINTF(RunaheadROB, "Adding sn:%llu to dependence chain (size: %i): %s\n",
                             prodStore->seqNum, buffer.size(),

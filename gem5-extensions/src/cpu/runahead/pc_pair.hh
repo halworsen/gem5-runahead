@@ -34,6 +34,8 @@ public:
     }
 };
 
+typedef std::vector<PCPair>::iterator ChainIt;
+
 } // namespace runahead
 } // namespace gem5
 

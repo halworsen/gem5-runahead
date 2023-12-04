@@ -13,7 +13,6 @@ namespace runahead
 {
 
 typedef std::unique_ptr<PCStateBase> PCStatePtr;
-typedef std::vector<PCStatePtr>::iterator ChainIt;
 
 } // namespace runahead
 } // namespace gem5

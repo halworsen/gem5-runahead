@@ -475,7 +475,7 @@ public:
      * PCs of instructions that should be executed by runahead. This acts as a filter for fetch.
      * If the chain is not empty, insts that do not hit in this chain are discarded by fetch
      */
-    std::vector<PCStatePtr> runaheadChain;
+    std::vector<PCPair> runaheadChain;
 
     /** Whether or not the given inst is in the runahead chain */
     bool inRunaheadChain(const DynInstPtr &inst);
