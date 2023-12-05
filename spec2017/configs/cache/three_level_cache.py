@@ -8,7 +8,7 @@ from gem5.components.cachehierarchies.classic.caches.l2cache import L2Cache
 from gem5.components.cachehierarchies.classic.caches.mmu_cache import MMUCache
 from gem5.isas import ISA
 from m5.params import NULL
-from m5.objects import Port, SystemXBar, Cache, BasePrefetcher, L2XBar, BadAddr
+from m5.objects import Port, SystemXBar, Cache, BasePrefetcher, L2XBar, BadAddr, StridePrefetcher
 
 class L3Cache(Cache):
     def __init__(
@@ -21,7 +21,7 @@ class L3Cache(Cache):
         mshrs: int = 20,
         tgts_per_mshr: int = 12,
         writeback_clean: bool = True,
-        prefetcher: BasePrefetcher = None,
+        prefetcher: BasePrefetcher = StridePrefetcher,
     ):
         super().__init__()
 
@@ -37,7 +37,7 @@ class L3Cache(Cache):
 
         self.writeback_clean = writeback_clean
 
-        if prefetcher is not None:
+        if prefetcher:
             self.prefetcher = prefetcher()
 
 class ThreeLevelCacheHierarchy(

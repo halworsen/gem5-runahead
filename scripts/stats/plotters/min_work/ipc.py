@@ -57,6 +57,7 @@ class MinimumWorkSensitivityIPC(Plotter):
             stock_insts, *_ = self.stat(f'{bench}.stock.simInsts')
             stock_cycles, *_ = self.stat(f'{bench}.stock.system.processor.cores1.core.numCycles')
             stock_ipc = stock_insts / stock_cycles
+            # stock_ipc, *_ = self.stat(f'{bench}.stock.system.processor.cores1.core.realIpc')
 
             row = {
                 'benchmark': bench,
@@ -76,11 +77,12 @@ class MinimumWorkSensitivityIPC(Plotter):
             re_cycles, *_ = self.stat(f'{bench}.runahead.system.processor.cores1.core.numCycles')
 
             ipc = re_insts / re_cycles
+            # ipc, *_ = self.stat(f'{bench}.runahead.system.processor.cores1.core.realIpc')
 
             row = {
                 'benchmark': bench,
-                'experiment': 'runahead',
-                'experiment_variable': 'runahead',
+                'experiment': 'Runahead',
+                'experiment_variable': 'Runahead',
                 'variant': 'Runahead',
                 'insts': re_insts,
                 'cycles': re_cycles,
@@ -96,6 +98,7 @@ class MinimumWorkSensitivityIPC(Plotter):
                     min_work_insts, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.simInsts')
                     min_work_cycles, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.system.processor.cores1.core.numCycles')
                     min_work_ipc = min_work_insts / min_work_cycles
+                    # min_work_ipc, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.system.processor.cores1.core.realIpc')
 
                     row = {
                         'benchmark': bench,
@@ -127,7 +130,7 @@ class MinimumWorkSensitivityIPC(Plotter):
 
         # Compute aggregate stats for minimum work
         # Roundabout way of selecting minimum work rows only
-        selector = (frame['experiment'] != 'runahead') & (frame['experiment'] != 'O3')
+        selector = (frame['experiment'] != 'Runahead') & (frame['experiment'] != 'O3')
         min_work_frame = frame[selector]
         # Start with deadline and work runs
         for variable in min_work_frame['experiment_variable'].unique():
@@ -165,12 +168,19 @@ class MinimumWorkSensitivityIPC(Plotter):
         self.frame = frame
 
     def plot(self) -> None:
-        fig = plt.figure(figsize=(16, 5))
+        fig = plt.figure(figsize=(20, 5))
+        gs = fig.add_gridspec(1, 2)
         sbn.set_style('whitegrid')
-        sbn.set_palette('Paired', n_colors=12)
 
+        o3_runahead_selector = (self.frame['experiment'] == 'O3') | (self.frame['experiment'] == 'Runahead')
+        work_selector = (self.frame['experiment_variable'] == 'work') | o3_runahead_selector
+        work_frame = self.frame[work_selector]
+        deadline_selector = (self.frame['experiment_variable'] == 'deadline') | o3_runahead_selector
+        deadline_frame = self.frame[deadline_selector]
+
+        _ = fig.add_subplot(gs[0, 0])
         plot = sbn.barplot(
-            self.frame,
+            work_frame,
             x='benchmark',
             y='ipc',
             hue='variant',
@@ -180,6 +190,24 @@ class MinimumWorkSensitivityIPC(Plotter):
         for l in plot.get_xticklabels():
                 l.set_rotation(90)
 
+        plot.set_title('Minimum work, no deadline')
+        plot.legend(title='CPU model', bbox_to_anchor=(1, 1))
+        plot.set_ylabel('IPC')
+        plot.set_xlabel('')
+
+        _ = fig.add_subplot(gs[0, 1])
+        plot = sbn.barplot(
+            deadline_frame,
+            x='benchmark',
+            y='ipc',
+            hue='variant',
+            errorbar=None,
+        )
+
+        for l in plot.get_xticklabels():
+                l.set_rotation(90)
+
+        plot.set_title('Exit deadlines, unrestricted work')
         plot.legend(title='CPU model', bbox_to_anchor=(1, 1))
         plot.set_ylabel('IPC')
         plot.set_xlabel('')

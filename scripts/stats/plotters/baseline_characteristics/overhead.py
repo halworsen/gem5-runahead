@@ -4,7 +4,7 @@ import seaborn as sbn
 import matplotlib.pyplot as plt
 
 class BaselineRunaheadOverhead(Plotter):
-    name = 'Overhead of entering and exiting runahead'
+    name = 'Overhead of entering and exiting runahead (UNSTACK THIS PLOT)'
     fname = 'baseline/baseline_runahead_overhead'
     description = 'The cycle overhead of entering and exiting runahead for every benchmark'
 

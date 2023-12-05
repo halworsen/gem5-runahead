@@ -3,6 +3,7 @@ from plotters.simpoint_weights import SimPointWeights
 from plotters.sens_analysis.ift_ipc import IFTIPCReal
 from plotters.sens_analysis.overlapping_runahead import OverlappingRE
 from plotters.sens_analysis.eager_entry import EagerEntry
+from plotters.sens_analysis.filtered_runahead import FilteredRE
 
 from plotters.baseline_characteristics.interim_periods import BaselineInterimPeriods
 from plotters.baseline_characteristics.ipc import BaselineIPC, BaselineAdjustedIPC
@@ -14,6 +15,8 @@ from plotters.min_work.ipc import MinimumWorkSensitivityIPC, MinimumWorkIPC
 from plotters.min_work.interim_periods import MinWorkInterimPeriods
 from plotters.min_work.runahead_time import MinWorkRunaheadTime, MinWorkRunaheadFraction, MinWorkRunaheadCycleFraction, MinWorkRunaheadPeriods
 from plotters.min_work.l2u import MinWorkL2U
+
+from plotters.dynamic_exit.ipc import DynamicExitIPC
 
 from argparse import ArgumentParser
 from os import makedirs
@@ -30,6 +33,7 @@ ALL_PLOTS = [
     # IFTIPCReal(r'^m5out\-spec2017\-traditional\-re\-ift\-(\d+)$'),
     # OverlappingRE(),
     # EagerEntry(),
+    # FilteredRE(),
 
     # Runahead baseline model characteristics
     # BaselineInterimPeriods(),
@@ -52,7 +56,10 @@ ALL_PLOTS = [
     # MinWorkRunaheadFraction(),
     # MinWorkRunaheadCycleFraction(),
     # MinWorkRunaheadPeriods(),
-    MinWorkL2U(),
+    # MinWorkL2U(),
+
+    # Dynamic exit model
+    DynamicExitIPC(),
 ]
 
 logging.basicConfig(
