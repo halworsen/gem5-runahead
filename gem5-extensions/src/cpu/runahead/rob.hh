@@ -291,6 +291,9 @@ class ROB
     /** Try to find the youngest valid, unsent load in the ROB. Returns 0 if there are none. */
     InstSeqNum findUnsentValidLoad(ThreadID tid);
 
+    /** Using the current runahead chain, find the n-th instance of its tail. Returns 0 if there is no n-th instance. */
+    InstSeqNum findChainTail(ThreadID tid, int n);
+
   private:
     /** Reset the ROB state */
     void resetState();

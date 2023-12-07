@@ -225,6 +225,8 @@ class Commit
     void signalExitRunahead(ThreadID tid, const DynInstPtr &inst);
 
   private:
+    void dynamicDelayedRunaheadExit(ThreadID tid);
+
     /** Updates the overall status of commit with the nextStatus, and
      * tell the CPU if commit is active/inactive.
      */
@@ -395,6 +397,7 @@ class Commit
     enum REExitPolicy {
         Eager,
         MinimumWork,
+        NLLB, // No Load Left Behind
         DynamicDelayed,
     };
     /** The runahead exit policy being used */
@@ -409,10 +412,13 @@ class Commit
     /** For the MinimumWork and DynamicDelayed policy: minimum insts to pseduoretire before exiting runahead */
     int minRunaheadWork = 0;
 
-    /** For the DynamicDelayed policy: seqnum to exit runahead at */
+    /** For the NLLB/DynamicDelayed policy: seqnum to exit runahead at */
     InstSeqNum runaheadExitSeqNum = 0;
 
-    /** Records if a thread should exit runahead this cycle */
+    /** Amount of L3 cache misses this runahead period */
+    int numLLLsThisPeriod = 0;
+
+    /** Records if a thread should exit runahead as soon as possible */
     bool exitRunahead[MaxThreads] = { false };
 
     /** 
@@ -424,20 +430,28 @@ class Commit
     /** The cause of the runahead period that is about to be exited */
     std::array<DynInstPtr, MaxThreads> runaheadCause;
 
-    /** The amount of cycles since runahead was last exited */
-    int runaheadExitCycles = -1;
-    /** The amount of cycles since runahead was entered */
-    int runaheadEnterCycles = -1;
-    /**
-     * Number of instructions in the IQ when runahead was entered
-     * While tracking runahead exit overhead, this is the amount
-     * of insts that need to enter the IQ before stopping counting cycles
-     */
-    size_t trackedIqInsts = 0;
-    /** Youngest sequence number in the IQ last cycle. Used when tracking runahead exit overhead */
-    InstSeqNum trackedIqSeqNum = 0;
-    /** Whether the IQ was empty when runahead was entered */
-    bool trackedIqEmpty = true;
+    /** Misc. information used by runahead to determine things like when to exit */
+    struct RunaheadInfo
+    {
+        /** The amount of cycles since runahead was last exited */
+        int runaheadExitCycles = -1;
+        /** The amount of cycles since runahead was entered */
+        int runaheadEnterCycles = -1;
+
+        /**
+         * Number of instructions in the IQ when runahead was entered
+         * While tracking runahead exit overhead, this is the amount
+         * of insts that need to enter the IQ before stopping counting cycles
+         */
+        size_t trackedIqInsts = 0;
+        /** Youngest sequence number in the IQ last cycle. Used when tracking runahead exit overhead */
+        InstSeqNum trackedIqSeqNum = 0;
+        /** Whether the IQ was empty when runahead was entered */
+        bool trackedIqEmpty = true;
+
+        /** Number of insts in the ROB when runahead was entered */
+        size_t trackedROBInsts = 0;
+    } runaheadInfo;
 
     /** Update state and metrics related to runahead at the end of the cycle */
     void updateRunaheadState(ThreadID tid);

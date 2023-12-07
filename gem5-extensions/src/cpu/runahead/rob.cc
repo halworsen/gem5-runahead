@@ -399,6 +399,20 @@ ROB::findUnsentValidLoad(ThreadID tid)
     return youngest;
 }
 
+InstSeqNum
+ROB::findChainTail(ThreadID tid, int n)
+{
+    for (InstIt it = instList[tid].begin(); it != instList[tid].end(); it++) {
+        if (cpu->runaheadChain.back() == (*it)->pcState()) {
+            n--;
+            if (n <= 0)
+                return (*it)->seqNum;
+        }
+    }
+
+    return 0;
+}
+
 void
 ROB::insertInst(const DynInstPtr &inst)
 {

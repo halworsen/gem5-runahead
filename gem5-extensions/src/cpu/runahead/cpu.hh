@@ -422,6 +422,9 @@ public:
     /** The instruction that caused us to enter runahead mode */
     std::array<DynInstPtr, MaxThreads> runaheadCause;
 
+    /** Whether or not the CPU is using filtered runahead */
+    bool usingFilteredRunahead() { return filteredRunahead; }
+
     /** Check if we can enter runahead right now, caused by the given inst */
     bool canEnterRunahead(ThreadID tid, const DynInstPtr &inst);
 
@@ -491,6 +494,9 @@ public:
 
     /** Get an iterator to the end of the runahead chain */
     ChainIt runaheadChainEnd() { return runaheadChain.end(); }
+
+    /** Get the size of the runahead chain */
+    size_t runaheadChainSize() { return runaheadChain.size(); }
 
     /** The tick at which runahead was last entered */
     Tick runaheadEnteredTick;
