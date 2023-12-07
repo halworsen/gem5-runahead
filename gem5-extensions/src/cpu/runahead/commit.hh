@@ -638,7 +638,8 @@ class Commit
             EagerExit,
             MinWorkDone,
             Dynamic,
-            Deadline
+            Deadline,
+            FetchPageFault
         };
     } stats;
 };

@@ -1659,6 +1659,15 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
                     "[tid:%i] [sn:%llu] %s fault ignored, inst is runahead\n",
                     tid, head_inst->seqNum, inst_fault->name());
             head_inst->setPoisoned();
+
+            // If it was a NOP carrying a page fault from fetch, however, we need to exit now
+            if (head_inst->notAnInst()) {
+                DPRINTF(RunaheadCommit, "[tid:%i] [sn:%llu] Inst was a page fault carrier from fetch, "
+                                        "exiting runahead now.\n", tid, head_inst->seqNum);
+                runaheadCause[tid] = cpu->runaheadCause[tid];
+                exitRunahead[tid] = true;
+                stats.runaheadExitCause[stats.REExitCause::FetchPageFault]++;
+            }
         }
 
         DPRINTF(CommitFaults,
