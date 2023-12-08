@@ -162,6 +162,8 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
     : statistics::Group(cpu, "fetch"),
     ADD_STAT(icacheStallCycles, statistics::units::Cycle::get(),
              "Number of cycles fetch is stalled on an Icache miss"),
+    ADD_STAT(icacheStallRealCycles, statistics::units::Cycle::get(),
+             "Number of cycles fetch is stalled on an Icache miss (normal mode only)"),
     ADD_STAT(insts, statistics::units::Count::get(),
              "Number of instructions fetch has processed"),
     ADD_STAT(branches, statistics::units::Count::get(),
@@ -175,6 +177,8 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
              "Number of cycles fetch has spent squashing"),
     ADD_STAT(tlbCycles, statistics::units::Cycle::get(),
              "Number of cycles fetch has spent waiting for tlb"),
+    ADD_STAT(tlbRealCycles, statistics::units::Cycle::get(),
+             "Number of cycles fetch has spent waiting for tlb (normal mode only)"),
     ADD_STAT(idleCycles, statistics::units::Cycle::get(),
              "Number of cycles fetch was idle"),
     ADD_STAT(blockedCycles, statistics::units::Cycle::get(),
@@ -188,6 +192,8 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
              "Number of stall cycles due to no active thread to fetch from"),
     ADD_STAT(pendingTrapStallCycles, statistics::units::Cycle::get(),
              "Number of stall cycles due to pending traps"),
+    ADD_STAT(pendingTrapRealStallCycles, statistics::units::Cycle::get(),
+             "Number of stall cycles due to pending traps (normal mode only)"),
     ADD_STAT(pendingQuiesceStallCycles, statistics::units::Cycle::get(),
              "Number of stall cycles due to pending quiesce instructions"),
     ADD_STAT(icacheWaitRetryStallCycles, statistics::units::Cycle::get(),
@@ -265,6 +271,7 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
             .flags(statistics::total);
         rate
             .flags(statistics::total);
+
         runaheadInsts
             .prereq(runaheadInsts);
         discardedRunaheadInsts
@@ -273,6 +280,10 @@ Fetch::FetchStatGroup::FetchStatGroup(CPU *cpu, Fetch *fetch)
             .prereq(runaheadInstsToDecode);
         runaheadChainLoops
             .prereq(runaheadChainLoops);
+
+        icacheStallRealCycles.prereq(icacheStallRealCycles);
+        tlbRealCycles.prereq(tlbRealCycles);
+        pendingTrapRealStallCycles.prereq(pendingTrapRealStallCycles);
 }
 void
 Fetch::setTimeBuffer(TimeBuffer<TimeStruct> *time_buffer)
@@ -1213,12 +1224,17 @@ Fetch::fetch(bool &status_change)
 
             fetchCacheLine(fetchAddr, tid, this_pc.instAddr());
 
-            if (fetchStatus[tid] == IcacheWaitResponse)
+            if (fetchStatus[tid] == IcacheWaitResponse) {
                 ++fetchStats.icacheStallCycles;
-            else if (fetchStatus[tid] == ItlbWait)
+                if (!cpu->inRunahead(tid))
+                    ++fetchStats.icacheStallRealCycles;
+            } else if (fetchStatus[tid] == ItlbWait) {
                 ++fetchStats.tlbCycles;
-            else
+                if (!cpu->inRunahead(tid))
+                    ++fetchStats.tlbRealCycles;
+            } else {
                 ++fetchStats.miscStallCycles;
+            }
             return;
         } else if (checkInterrupt(this_pc.instAddr()) &&
                 !delayedCommit[tid]) {
@@ -1648,6 +1664,8 @@ Fetch::profileStall(ThreadID tid)
         DPRINTF(Fetch, "[tid:%i] Fetch is squashing!\n", tid);
     } else if (fetchStatus[tid] == IcacheWaitResponse) {
         ++fetchStats.icacheStallCycles;
+        if (!cpu->inRunahead(tid))
+            ++fetchStats.icacheStallRealCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is waiting cache response!\n",
                 tid);
     } else if (fetchStatus[tid] == ItlbWait) {
@@ -1656,6 +1674,8 @@ Fetch::profileStall(ThreadID tid)
                 "finish!\n", tid);
     } else if (fetchStatus[tid] == TrapPending) {
         ++fetchStats.pendingTrapStallCycles;
+        if (!cpu->inRunahead(tid))
+            ++fetchStats.pendingTrapRealStallCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is waiting for a pending trap!\n",
                 tid);
     } else if (fetchStatus[tid] == QuiescePending) {

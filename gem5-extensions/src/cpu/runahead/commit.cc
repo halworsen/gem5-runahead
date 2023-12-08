@@ -234,6 +234,10 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "Total amount of cycles spent entering and exiting runahead"),
       ADD_STAT(runaheadDelayedCycles, statistics::units::Cycle::get(),
                "Number of runahead cycles in which it was safe to exit runahead"),
+      ADD_STAT(runaheadDelayedInsts, statistics::units::Cycle::get(),
+               "Number of runahead insts that were retired while it was safe to exit runahead"),
+      ADD_STAT(runaheadDelayedLoads, statistics::units::Cycle::get(),
+               "Number of runahead loads that were retired while it was safe to exit runahead"),
       ADD_STAT(runaheadExitCause, statistics::units::Count::get(),
                "Final cause for exiting runahead")
 {
@@ -319,6 +323,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
     totalRunaheadExitOverhead.prereq(totalRunaheadExitOverhead);
     totalRunaheadOverhead = totalRunaheadEnterOverhead + totalRunaheadExitOverhead;
     runaheadDelayedCycles.prereq(runaheadDelayedCycles);
+    runaheadDelayedInsts.prereq(runaheadDelayedInsts);
+    runaheadDelayedLoads.prereq(runaheadDelayedLoads);
 
     runaheadExitCause
         .init(REExitCause::FetchPageFault + 1)
@@ -1962,6 +1968,12 @@ Commit::updateComInstStats(const DynInstPtr &inst)
             stats.loadsPseudoretired++;
             if (!inst->isPoisoned())
                 stats.validLoadsPseudoretired++;
+        }
+
+        if (runaheadExitable[tid]) {
+            stats.runaheadDelayedInsts++;
+            if (inst->isLoad())
+                stats.runaheadDelayedLoads++;
         }
     }
 }

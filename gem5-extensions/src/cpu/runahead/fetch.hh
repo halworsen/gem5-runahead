@@ -540,6 +540,8 @@ class Fetch
         // vectors and tracking on a per thread basis.
         /** Stat for total number of cycles stalled due to an icache miss. */
         statistics::Scalar icacheStallCycles;
+        /** Stat for total number of cycles stalled due to an icache miss (normal mode only). */
+        statistics::Scalar icacheStallRealCycles;
         /** Stat for total number of fetched instructions. */
         statistics::Scalar insts;
         /** Total number of fetched branches. */
@@ -552,6 +554,8 @@ class Fetch
         statistics::Scalar squashCycles;
         /** Stat for total number of cycles spent waiting for translation */
         statistics::Scalar tlbCycles;
+        /** Stat for total number of cycles spent waiting for translation (normal mode only) */
+        statistics::Scalar tlbRealCycles;
         /** Stat for total number of cycles
          *  spent blocked due to other stages in
          * the pipeline.
@@ -567,6 +571,8 @@ class Fetch
         statistics::Scalar noActiveThreadStallCycles;
         /** Total number of stall cycles caused by pending traps. */
         statistics::Scalar pendingTrapStallCycles;
+        /** Total number of stall cycles caused by pending traps (normal mode only). */
+        statistics::Scalar pendingTrapRealStallCycles;
         /** Total number of stall cycles
          *  caused by pending quiesce instructions. */
         statistics::Scalar pendingQuiesceStallCycles;

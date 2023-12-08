@@ -631,6 +631,10 @@ class Commit
         statistics::Formula totalRunaheadOverhead;
         /** Number of runahead cycles in which it was safe to exit runahead */
         statistics::Scalar runaheadDelayedCycles;
+        /** Amount of insts retired in delayed runahead */
+        statistics::Scalar runaheadDelayedInsts;
+        /** Amount of loads retired in delayed runahead */
+        statistics::Scalar runaheadDelayedLoads;
 
         /** Final cause for exiting runahead */
         statistics::Vector runaheadExitCause;
