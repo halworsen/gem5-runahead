@@ -103,7 +103,7 @@ ArchCheckpoint::restore(ThreadID tid)
                 if (curVal != checkpointVal) { // && archIdx == TheISA::misc_reg::Rflags
                     DPRINTF(RunaheadCheckpoint, "[tid:%i] Restoring misc reg %i to value %#x (was %#x)\n",
                             tid, archIdx, checkpointVal, curVal);
-                    cpu->setMiscReg(archIdx, checkpointVal, tid);
+                    cpu->setMiscRegNoEffect(archIdx, checkpointVal, tid);
                 }
             }
         }
