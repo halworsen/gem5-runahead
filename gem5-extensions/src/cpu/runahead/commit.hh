@@ -636,6 +636,11 @@ class Commit
         /** Amount of loads retired in delayed runahead */
         statistics::Scalar runaheadDelayedLoads;
 
+        /** Number of loads that caused a full ROB stall */
+        statistics::Scalar fullROBLoads;
+        // Tracking for the above stat
+        InstSeqNum curROBHeadLoadSn = 0;
+
         /** Final cause for exiting runahead */
         statistics::Vector runaheadExitCause;
         enum REExitCause {

@@ -344,6 +344,10 @@ CPU::CPUStats::CPUStats(CPU *cpu)
                "Total number of cycles spent in runahead"),
       ADD_STAT(realCycles, statistics::units::Cycle::get(),
                "Total number of cycles spent outside of runahead"),
+      ADD_STAT(numROBFullCycles, statistics::units::Cycle::get(),
+               "Total number of cycles starting with a full ROB"),
+      ADD_STAT(numRealROBFullCycles, statistics::units::Cycle::get(),
+               "Total number of cycles starting with a full ROB (normal mode only)"),
       ADD_STAT(timesIdled, statistics::units::Count::get(),
                "Number of times that the entire CPU went into an idle state "
                "and unscheduled itself"),
@@ -451,6 +455,8 @@ CPU::CPUStats::CPUStats(CPU *cpu)
     // Register any of the RunaheadCPU's stats here.
     runaheadCycles.prereq(runaheadCycles);
     realCycles.prereq(realCycles);
+    numROBFullCycles.prereq(numROBFullCycles);
+    numRealROBFullCycles.prereq(numRealROBFullCycles);
 
     timesIdled
         .prereq(timesIdled);
@@ -617,6 +623,12 @@ CPU::tick()
     assert(drainState() != DrainState::Drained);
 
     ++baseStats.numCycles;
+    if (rob.numFreeEntries(0) == 0) {
+        ++cpuStats.numROBFullCycles;
+        if (!inRunahead(0))
+            cpuStats.numRealROBFullCycles++;
+    }
+
     // todo: per thread
     if (inRunahead(0))
         ++cpuStats.runaheadCycles;
@@ -2056,10 +2068,17 @@ CPU::wakeCPU()
         --cycles;
         cpuStats.idleCycles += cycles;
         baseStats.numCycles += cycles;
-        if (inRunahead(0))
+
+        if (rob.numFreeEntries(0) == 0)
+            cpuStats.numROBFullCycles++;
+
+        if (inRunahead(0)) {
             cpuStats.runaheadCycles += cycles;
-        else
+        } else {
+            if (rob.numFreeEntries(0) == 0)
+                cpuStats.numRealROBFullCycles += cycles;
             cpuStats.realCycles += cycles;
+        }
     }
 
     schedule(tickEvent, clockEdge());

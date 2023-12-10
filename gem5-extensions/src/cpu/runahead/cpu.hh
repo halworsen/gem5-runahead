@@ -735,6 +735,10 @@ public:
         statistics::Scalar runaheadCycles;
         /** Number of cycles spent outside of runahead */
         statistics::Scalar realCycles;
+        /** Number of cycles starting with a full ROB */
+        statistics::Scalar numROBFullCycles;
+        /** Number of cycles starting with a full ROB (normal mode only) */
+        statistics::Scalar numRealROBFullCycles;
 
         /** Stat for total number of times the CPU is descheduled. */
         statistics::Scalar timesIdled;

@@ -238,6 +238,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "Number of runahead insts that were retired while it was safe to exit runahead"),
       ADD_STAT(runaheadDelayedLoads, statistics::units::Cycle::get(),
                "Number of runahead loads that were retired while it was safe to exit runahead"),
+      ADD_STAT(fullROBLoads, statistics::units::Count::get(),
+               "Number of times a load caused a full ROB stall"),
       ADD_STAT(runaheadExitCause, statistics::units::Count::get(),
                "Final cause for exiting runahead")
 {
@@ -325,6 +327,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
     runaheadDelayedCycles.prereq(runaheadDelayedCycles);
     runaheadDelayedInsts.prereq(runaheadDelayedInsts);
     runaheadDelayedLoads.prereq(runaheadDelayedLoads);
+
+    fullROBLoads.prereq(fullROBLoads);
 
     runaheadExitCause
         .init(REExitCause::FetchPageFault + 1)
@@ -620,6 +624,10 @@ Commit::generateTCEvent(ThreadID tid)
 void
 Commit::signalExitRunahead(ThreadID tid, const DynInstPtr &inst)
 {
+    // We already know
+    if (runaheadExitable[tid])
+        return;
+
     DPRINTF(RunaheadCommit, "[tid:%i] Runahead exit signal received, cause inst sn:%llu, PC: %s.\n",
                      tid, inst->seqNum, inst->pcState());
 
@@ -702,27 +710,27 @@ Commit::dynamicDelayedRunaheadExit(ThreadID tid)
         return;
     }
 
-    // Check if there's an unsent, valid load in the ROB
+    // Check if there's an unsent, valid load in the ROB within the minimum work limit of instructions
     InstSeqNum loadSn = rob->findUnsentValidLoad(tid);
     if (!loadSn) {
-        DPRINTF(RunaheadCommit, "No unsent loads in the ROB, exiting ASAP.\n");
+        DPRINTF(RunaheadCommit, "No nearby unsent loads in the ROB, exiting ASAP.\n");
         exitRunahead[tid] = true;
         stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
         return;
     }
 
-    // That load is the latest possible sequence number deadline anyways
+    // We exit once we're done with that load
     runaheadExitSeqNum = loadSn;
     InstSeqNum instsToPseudoRetire = loadSn - rob->readHeadInst(tid)->seqNum;
-    DPRINTF(RunaheadCommit, "[tid:%i] Unsent load found in ROB, sn:%llu.\n", tid, loadSn);
+    DPRINTF(RunaheadCommit, "[tid:%i] Nearby unsent load found in ROB, sn:%llu.\n", tid, loadSn);
 
-    // But make sure it isn't too far away
     if (instsToPseudoRetire <= minRunaheadWork) {
         DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead after sn:%llu, in %i insts.\n",
                 tid, loadSn, instsToPseudoRetire);
         return;
     }
 
+    // Otherwise, we need to constrain the amount of delayed work that is being done
     DPRINTF(RunaheadCommit, "[tid:%i] Load is too far away.\n", tid);
     bool hasChain = cpu->usingFilteredRunahead() ? (cpu->runaheadChainSize() > 0) : false;
     if (hasChain) {
@@ -1304,7 +1312,12 @@ Commit::commitInsts()
                 break;
             }
 
-            ++stats.loadsAtROBHead;
+            // Track cycles with a load at the ROB head + amount of times a load caused a full ROB stall
+            if (rob->numFreeEntries(head_inst->threadNumber) == 0 && head_inst->seqNum != stats.curROBHeadLoadSn) {
+                stats.fullROBLoads++;
+                stats.curROBHeadLoadSn = head_inst->seqNum;
+            }
+            stats.loadsAtROBHead++;
 
             gem5::runahead::LSQ::LSQRequest *lsqRequest = head_inst->savedRequest;
             // That request must not be completed, and it must have been sent to memory
@@ -1333,7 +1346,7 @@ Commit::commitInsts()
                 }
             }
 
-            // If all packets went far enough down the memory hierarchy, try to enter runahead
+            // If all packets missed in cache, enter runahead
             if (allPktsMissed) {
                 ++stats.lllAtROBHead;
 
