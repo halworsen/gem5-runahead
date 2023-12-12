@@ -383,8 +383,12 @@ ROB::generateChainBuffer(const DynInstPtr &inst, std::vector<PCPair> &buffer)
 }
 
 InstSeqNum
-ROB::findUnsentValidLoad(ThreadID tid)
+ROB::findUnsentValidLoad(ThreadID tid, int limit)
 {
+    // no limit
+    if (limit == -1)
+        limit = threadEntries[tid];
+
     InstSeqNum youngest = 0;
     for (InstIt it = instList[tid].begin(); it != instList[tid].end(); it++) {
         DynInstPtr inst = *it;
@@ -394,6 +398,10 @@ ROB::findUnsentValidLoad(ThreadID tid)
             continue;
         if (!inst->isExecuted())
             youngest = inst->seqNum;
+
+        limit--;
+        if (limit <= 0)
+            break;
     }
 
     return youngest;

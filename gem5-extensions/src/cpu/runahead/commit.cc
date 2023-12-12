@@ -711,7 +711,7 @@ Commit::dynamicDelayedRunaheadExit(ThreadID tid)
     }
 
     // Check if there's an unsent, valid load in the ROB within the minimum work limit of instructions
-    InstSeqNum loadSn = rob->findUnsentValidLoad(tid);
+    InstSeqNum loadSn = rob->findUnsentValidLoad(tid, minRunaheadWork);
     if (!loadSn) {
         DPRINTF(RunaheadCommit, "No nearby unsent loads in the ROB, exiting ASAP.\n");
         exitRunahead[tid] = true;
@@ -719,32 +719,13 @@ Commit::dynamicDelayedRunaheadExit(ThreadID tid)
         return;
     }
 
-    // We exit once we're done with that load
-    runaheadExitSeqNum = loadSn;
-    InstSeqNum instsToPseudoRetire = loadSn - rob->readHeadInst(tid)->seqNum;
-    DPRINTF(RunaheadCommit, "[tid:%i] Nearby unsent load found in ROB, sn:%llu.\n", tid, loadSn);
-
-    if (instsToPseudoRetire <= minRunaheadWork) {
-        DPRINTF(RunaheadCommit, "[tid:%i] Exiting runahead after sn:%llu, in %i insts.\n",
-                tid, loadSn, instsToPseudoRetire);
-        return;
-    }
-
-    // Otherwise, we need to constrain the amount of delayed work that is being done
-    DPRINTF(RunaheadCommit, "[tid:%i] Load is too far away.\n", tid);
-    bool hasChain = cpu->usingFilteredRunahead() ? (cpu->runaheadChainSize() > 0) : false;
-    if (hasChain) {
-        int chainsToExec = minRunaheadWork / cpu->runaheadChainSize();
-        if (!chainsToExec) {
-            DPRINTF(RunaheadCommit, "[tid:%i] Had a chain, but won't execute any more. Exiting ASAP.\n", tid);
-            exitRunahead[tid] = true;
-        } else {
-            DPRINTF(RunaheadCommit, "[tid:%i] Had a runahead chain, executing %i chains\n.", tid, chainsToExec);
-            runaheadExitSeqNum = rob->findChainTail(tid, chainsToExec);
-        }
-    } else {
+    DPRINTF(RunaheadCommit, "[tid:%i] Checking that we have a runahead chain.\n", tid);
+    // Default to true so we delay even if we're not using filtered runahead
+    bool hasChain = cpu->usingFilteredRunahead() ? (cpu->runaheadChainSize() > 0) : true;
+    if (!hasChain) {
         DPRINTF(RunaheadCommit, "[tid:%i] Not executing a chain, exiting ASAP.\n");
         exitRunahead[tid] = true;
+        stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
     }
 }
 
