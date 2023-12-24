@@ -90,7 +90,7 @@ FSPARAMS=(
 
     # Runahead options
     "--lll-threshold=3"
-    "--rcache-size=8kB"
+    "--rcache-size=2kB"
     "--lll-latency-threshold=300"
     "--runahead-exit-policy=Eager"
     "--eager-entry"

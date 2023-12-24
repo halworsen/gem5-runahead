@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name="spec2017-re-minwork-deadline-50"
+#SBATCH --job-name="spec2017-re-minwork"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null

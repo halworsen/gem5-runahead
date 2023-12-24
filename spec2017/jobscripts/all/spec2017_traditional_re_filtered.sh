@@ -110,7 +110,6 @@ FSPARAMS=(
     "--lll-threshold=3"
     "--rcache-size=2kB"
     "--lll-latency-threshold=250"
-    # "--overlapping-runahead"
     "--runahead-exit-policy=Eager"
 
     # Cache & memory

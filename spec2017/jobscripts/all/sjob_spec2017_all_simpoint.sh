@@ -1,9 +1,9 @@
 #!/bin/sh
-#SBATCH --job-name="spec2017-simpoint-all"
+#SBATCH --job-name="spec2017-simpoint"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
-#SBATCH --array=1-16%8
+#SBATCH --array=1-16
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
@@ -80,7 +80,6 @@ FSPARAMS=(
     "--kernel=$SPEC2017_DIR/plinux"
     "--image=$SPEC2017_DIR/x86-3.img"
     "--script=$RUNSCRIPT"
-    "--max-insts=50000000000" # max 50 billion instructions
     "--clock=3.2GHz"
 
     # 100mil insts
@@ -99,6 +98,6 @@ echo "spec2017.py parameters:"
 echo "$PARAMS"
 echo
 
-./gem5/build/X86/gem5.opt --outdir $M5_OUT_DIR \
+./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
     $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE

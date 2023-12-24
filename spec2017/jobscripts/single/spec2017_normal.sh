@@ -1,61 +1,44 @@
 #!/bin/sh
-#SBATCH --job-name="spec2017-re-dynamic-exit"
+#SBATCH --job-name="spec2017-dbg"
 #SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
 #SBATCH --output=/dev/null
-#SBATCH --array=1-16
 #SBATCH --exclude=idun-02-45,idun-02-49
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=5000
 #SBATCH --time=7-06:00:00
-#SBATCH --exclude=idun-02-45
 #SBATCH --signal=B:SIGINT@120
 
 #
 # Restore from a checkpoint then switch cores to the runahead CPU for simulation
 #
 
-ALL_BENCHMARKS=(
-    "cactuBSSN_s_0"
-    "exchange2_s_0"
-    "fotonik3d_s_0"
-    "gcc_s_1" "gcc_s_2"
-    "imagick_s_0"
-    "mcf_s_0"
-    "nab_s_0"
-    "omnetpp_s_0"
-    "perlbench_s_0" "perlbench_s_1" "perlbench_s_2"
-    "wrf_s_0"
-    "x264_s_0"
-    "x264_s_2"
-    "xalancbmk_s_0"
-)
-
 declare -A CHECKPOINTS
+
 CHECKPOINTS=(
-    ["perlbench_s_0"]="cpt_26723810289983_sp-1_interval-369_insts-36900000000_warmup-1000000"
-    ["perlbench_s_1"]="cpt_33681194937967_sp-1_interval-462_insts-46200000000_warmup-1000000"
-    ["perlbench_s_2"]="cpt_31705186092754_sp-2_interval-430_insts-43000000000_warmup-1000000"
-    ["gcc_s_1"]="cpt_17042282256812_sp-5_interval-226_insts-22600000000_warmup-1000000"
-    ["gcc_s_2"]="cpt_13527511076677_sp-6_interval-175_insts-17500000000_warmup-1000000"
-    ["mcf_s_0"]="cpt_19962348413297_sp-4_interval-303_insts-30300000000_warmup-1000000"
-    ["cactuBSSN_s_0"]="cpt_3967868295569_sp-8_interval-42_insts-4200000000_warmup-1000000"
-    ["omnetpp_s_0"]="cpt_11595386405228_sp-0_interval-147_insts-14700000000_warmup-1000000"
-    ["wrf_s_0"]="cpt_1843422166344_sp-2_interval-9_insts-900000000_warmup-1000000"
-    ["xalancbmk_s_0"]="cpt_6663676485929_sp-3_interval-78_insts-7800000000_warmup-1000000"
-    ["x264_s_0"]="cpt_17538057313183_sp-6_interval-262_insts-26200000000_warmup-1000000"
-    ["x264_s_2"]="cpt_19291726768026_sp-1_interval-286_insts-28600000000_warmup-1000000"
-    ["imagick_s_0"]="cpt_8960565880504_sp-1_interval-114_insts-11400000000_warmup-1000000"
-    ["nab_s_0"]="cpt_17177317375364_sp-0_interval-242_insts-24200000000_warmup-1000000"
-    ["exchange2_s_0"]="cpt_35840173871729_sp-2_interval-456_insts-45600000000_warmup-1000000"
+    ["perlbench_s_0"]="cpt_10394048025897_sp-5_interval-132_insts-13200000000_warmup-1000000"
+    ["perlbench_s_1"]="cpt_2748881699511_sp-2_interval-21_insts-2100000000_warmup-1000000"
+    ["perlbench_s_2"]="cpt_6795593793953_sp-3_interval-80_insts-8000000000_warmup-1000000"
+    ["gcc_s_1"]="cpt_25257149893251_sp-9_interval-344_insts-34400000000_warmup-1000000"
+    ["gcc_s_2"]="cpt_8421685402194_sp-0_interval-101_insts-10100000000_warmup-1000000"
+    ["mcf_s_0"]="cpt_8838793351635_sp-3_interval-122_insts-12200000000_warmup-1000000"
+    ["cactuBSSN_s_0"]="cpt_22334708673673_sp-5_interval-323_insts-32300000000_warmup-1000000"
+    ["omnetpp_s_0"]="cpt_2742825868472_sp-2_interval-21_insts-2100000000_warmup-1000000"
+    ["wrf_s_0"]="cpt_3243120001002_sp-3_interval-14_insts-1400000000_warmup-1000000"
+    ["xalancbmk_s_0"]="cpt_23259882747842_sp-2_interval-313_insts-31300000000_warmup-1000000"
+    ["x264_s_0"]="cpt_8240200219449_sp-0_interval-113_insts-11300000000_warmup-1000000"
+    ["x264_s_2"]="cpt_18329730381647_sp-0_interval-271_insts-27100000000_warmup-1000000"
+    ["imagick_s_0"]="cpt_30896551699522_sp-2_interval-438_insts-43800000000_warmup-1000000"
+    ["nab_s_0"]="cpt_3307569092009_sp-1_interval-29_insts-2900000000_warmup-1000000"
+    ["exchange2_s_0"]="cpt_18364915843768_sp-9_interval-226_insts-22600000000_warmup-1000000"
     ["fotonik3d_s_0"]="cpt_35309091816902_sp-0_interval-473_insts-47300000000_warmup-1000000"
 )
 
 SPEC2017_DIR=/cluster/home/markuswh/gem5-runahead/spec2017
 RUNSCRIPT_DIR="$SPEC2017_DIR/runscripts"
-BENCHMARK=${ALL_BENCHMARKS[$SLURM_ARRAY_TASK_ID - 1]}
+BENCHMARK=$1
 CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
 RUNSCRIPT="$RUNSCRIPT_DIR/$BENCHMARK.rcS"
 
@@ -92,7 +75,6 @@ pip freeze
 
 echo
 echo "job: simulate SPEC2017 benchmark at simpoint - $BENCHMARK"
-echo "node: $(hostname)"
 echo "time: $(date)"
 echo "--- start job ---"
 
@@ -107,14 +89,7 @@ FSPARAMS=(
     "--restore-checkpoint=$M5_OUT_DIR/../m5out-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
-    "--lll-threshold=3"
-    "--rcache-size=2kB"
-    "--lll-latency-threshold=300" # cycles
-    # "--overlapping-runahead"
-    "--runahead-exit-policy=DynamicDelayed"
-    "--runahead-exit-deadline=100" # cycles
-    "--runahead-min-work=25" # insts
-    "--eager-entry"
+    "--no-runahead"
 
     # Cache & memory
     "--l1i-size=32kB" "--l1i-assoc=4"

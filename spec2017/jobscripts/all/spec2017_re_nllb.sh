@@ -1,14 +1,37 @@
 #!/bin/sh
-#SBATCH --job-name="gem5-gdb"
-#SBATCH --account=share-ie-idi
+#SBATCH --job-name="spec2017-re-nllb"
+#SBATCH --account=ie-idi
 #SBATCH --mail-type=ALL
-#SBATCH --output=/dev/null                       # output is manually redirected
+#SBATCH --output=/dev/null
+#SBATCH --array=1-16
+#SBATCH --exclude=idun-02-45,idun-02-49
 #SBATCH --partition=CPUQ
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=2000
-#SBATCH --time=06:00:00
-#SBATCH --signal=B:SIGINT@120                    # exit with SIGINT to let gem5 save stats 
+#SBATCH --mem=5000
+#SBATCH --time=7-06:00:00
+#SBATCH --exclude=idun-02-45
+#SBATCH --signal=B:SIGINT@120
+
+#
+# Restore from a checkpoint then switch cores to the runahead CPU for simulation
+#
+
+ALL_BENCHMARKS=(
+    "cactuBSSN_s_0"
+    "exchange2_s_0"
+    "fotonik3d_s_0"
+    "gcc_s_1" "gcc_s_2"
+    "imagick_s_0"
+    "mcf_s_0"
+    "nab_s_0"
+    "omnetpp_s_0"
+    "perlbench_s_0" "perlbench_s_1" "perlbench_s_2"
+    "wrf_s_0"
+    "x264_s_0"
+    "x264_s_2"
+    "xalancbmk_s_0"
+)
 
 declare -A CHECKPOINTS
 CHECKPOINTS=(
@@ -30,47 +53,50 @@ CHECKPOINTS=(
     ["fotonik3d_s_0"]="cpt_35309091816902_sp-0_interval-473_insts-47300000000_warmup-1000000"
 )
 
-BENCHMARK="omnetpp_s_0"
-CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
-SPEC2017_DIR="/cluster/home/markuswh/gem5-runahead/spec2017"
+SPEC2017_DIR=/cluster/home/markuswh/gem5-runahead/spec2017
 RUNSCRIPT_DIR="$SPEC2017_DIR/runscripts"
+BENCHMARK=${ALL_BENCHMARKS[$SLURM_ARRAY_TASK_ID - 1]}
+CHECKPOINT=${CHECKPOINTS[$BENCHMARK]}
 RUNSCRIPT="$RUNSCRIPT_DIR/$BENCHMARK.rcS"
-RUNAHEAD_DIR="$HOME/gem5-runahead"
+
+# sanity check
+if ! [[ -f "$RUNSCRIPT"  ]]; then
+    echo "$BENCHMARK - invalid benchmark!"
+    exit 1
+fi
 
 # create the log directory
-LOG_DIR="$RUNAHEAD_DIR/debug/logs"
+LOG_DIR="$SPEC2017_DIR/logs/$BENCHMARK"
 if ! [[ -d "$LOG_DIR" ]]; then
     mkdir -p "$LOG_DIR"
 fi
 
 M5_OUT_DIR="$LOG_DIR/m5out-${SLURM_JOB_NAME}"
+CHECKPOINT_DIR="$LOG_DIR/checkpoints"
+SIMPOINT_DIR="$LOG_DIR/simpoints"
 SIMOUT_FILE="$LOG_DIR/${SLURM_JOB_NAME}_simout.log"
 SLURM_LOG_FILE="$LOG_DIR/${SLURM_JOB_NAME}_slurm.log"
 
 # redirect all output to the slurm logfile
 exec &> $SLURM_LOG_FILE
 
-# Parse workload option
-while getopts "w:" flag
-do
-    case "${flag}" in
-        w) WORKLOAD="${OPTARG}";
-    esac
-done
+echo "--- loading modules ---"
+module --quiet purge
+module restore gem5
+module list
 
-if [[ -z "$WORKLOAD" ]]; then
-    echo "Workload is not specified! Must be \"test\" or \"spec2017\""
-    exit 1
-fi
+cd /cluster/home/markuswh/gem5-runahead
+source venv/bin/activate
+echo "--- python packages ---"
+pip freeze
 
-# Params if running the matrix multiplication test program
-TEST_PARAMS=(
-    "--size=8"
-    "--random=1"
-)
+echo
+echo "job: simulate SPEC2017 benchmark at simpoint - $BENCHMARK"
+echo "node: $(hostname)"
+echo "time: $(date)"
+echo "--- start job ---"
 
-# Params if running the SPEC2017 benchmarks
-SPEC_PARAMS=(
+FSPARAMS=(
     "--kernel=$SPEC2017_DIR/plinux"
     "--image=$SPEC2017_DIR/x86-3.img"
     "--script=$RUNSCRIPT"
@@ -78,14 +104,15 @@ SPEC_PARAMS=(
     "--clock=3.2GHz"
 
     # Instantiate using the given checkpoint
-    "--restore-checkpoint=$SPEC2017_DIR/logs/$BENCHMARK/m5out-spec2017-sp-chkpt-all/$CHECKPOINT"
+    "--restore-checkpoint=$M5_OUT_DIR/../m5out-spec2017-sp-chkpt-all/$CHECKPOINT"
 
     # Runahead options
-    # "--no-runahead"
     "--lll-threshold=3"
     "--rcache-size=2kB"
-    "--lll-latency-threshold=300"
-    "--runahead-exit-policy=Eager"
+    "--lll-latency-threshold=300" # cycles
+    # "--overlapping-runahead"
+    "--runahead-exit-policy=NLLB"
+    "--runahead-exit-deadline=100" # cycles
     "--eager-entry"
 
     # Cache & memory
@@ -111,50 +138,26 @@ SPEC_PARAMS=(
     "--mem-ports=2"
 )
 
-# Setup config script/params for the workload
-case "$WORKLOAD" in
-    "test")
-        CONFIG_SCRIPT="$RUNAHEAD_DIR/gem5-extensions/configs/test/test_re.py"
-        CONFIG_PARAMS="${TEST_PARAMS[@]}"
-        ;;
-    "spec2017")
-        CONFIG_SCRIPT="$SPEC2017_DIR/configs/spec2017.py"
-        CONFIG_PARAMS="${SPEC_PARAMS[@]}"
-        ;;
-esac
-
-echo "--- loading modules ---"
-module --quiet purge
-module restore gem5
-module list
-
-cd $RUNAHEAD_DIR
-source venv/bin/activate
-echo "--- python packages ---"
-pip freeze
-
+PARAMS="${FSPARAMS[@]}"
+echo "spec2017.py parameters:"
+echo "$PARAMS"
 echo
-echo "job: test run of gem5 - $WORKLOAD"
-echo "time: $(date)"
-echo "config script: $CONFIG_SCRIPT"
-echo "config params: $CONFIG_PARAMS"
-echo "--- start job ---"
 
-# Debug functions provided by gem5:
-# schedBreak(tick) - schedule SIGTRAP at tick
-# setDebugFlag("flag") - set a debug flag
-# clearDebugFlag("flag") - clear a debug flag
-# eventqDump() - print all events in the event queue
-# takeCheckpoint(tick) - write a checkpoint at tick
-# SimObject::find("system.qualified.name") - use FQN to get a pointer to the specified simobject
-#
-# use schedBreak(<tick>) when connected to target
-GDBSERVER=$HOME/gdb-13.2/gdbserver/gdbserver
-$GDBSERVER localhost:34617 \
-    ./gem5/build/X86/gem5.debug \
-    --outdir $M5_OUT_DIR \
-    $CONFIG_SCRIPT $CONFIG_PARAMS \
+./gem5/build/X86/gem5.fast --outdir $M5_OUT_DIR \
+    $SPEC2017_DIR/configs/spec2017.py $PARAMS \
     > $SIMOUT_FILE
+
+# Parse simulation statistics to JSON
+echo "--- simulation end ---"
+echo "parsing simulation statistics"
+
+STAT_PARSE_SCRIPT=/cluster/home/markuswh/gem5-runahead/scripts/stats/statdump.py
+PARSED_STATS_NAME=gem5stats.json
+
+python $STAT_PARSE_SCRIPT \
+    --format json \
+    --out $M5_OUT_DIR/$PARSED_STATS_NAME \
+    $M5_OUT_DIR/stats.txt
 
 # Move simout and SLURM output
 mv $SIMOUT_FILE $M5_OUT_DIR
