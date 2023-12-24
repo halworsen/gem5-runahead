@@ -18,7 +18,7 @@ def sim_fs_normal(root, args, switch_core=True):
 
         # get the stats as a dict (idk why this function is called to_json)
         simstats = m5.stats.gem5stats.get_simstat(root).to_json()
-        boot_insts = int(simstats['system']['processor']['cores0']['core']\
+        boot_insts = int(simstats['system']['processor']['cores']['core']\
                         ['exec_context.thread_0']['numInsts']['value'])
         print(f'Boot finished in {boot_insts} instructions')
 

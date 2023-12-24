@@ -39,19 +39,22 @@ while not stat_queue.empty():
             stat_name += f'::{data["bucket"]}'
         try:
             data_b = data_b[key]
-            relative = data_b['values'][0] / data['values'][0]
-            line = stat_name + f'{relative*100:.2f}%'.rjust(line_len - len(stat_name))
+            increase = (data_b['values'][0] - data['values'][0]) / data['values'][0]
+            if increase*100 > 100:
+                print(stat_name)
+            line = stat_name + f'  {increase*100:.2f}%' + f' | {data["values"][0]} -> {data_b["values"][0]}'
             out_file.write(f'{line}\n')
         except KeyError:
-            line = stat_name + f'{data["values"][0]}'.rjust(line_len - len(stat_name))
+            line = stat_name + f'  {data["values"][0]}'
             out_file.write(f'{line} (Not present in {sys.argv[3]})\n')
             continue
         except ZeroDivisionError:
-            line = stat_name + f'{data["values"][0]} -> {data_b["values"][0]}'.rjust(line_len - len(stat_name))
+            line = stat_name + f'  {data["values"][0]} -> {data_b["values"][0]}'
             out_file.write(f'{line} (Div0)\n')
     else:
         for k in data.keys():
-            stat_queue.put((data_a[key], data_b[key], k))
+            if key in data_b:
+                stat_queue.put((data_a[key], data_b[key], k))
         
 
 out_file.close()

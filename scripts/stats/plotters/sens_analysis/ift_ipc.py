@@ -10,9 +10,9 @@ import scipy
 
 LOG = logging.getLogger(__name__)
 
-class IFTIPCReal(Plotter):
+class IFTIPC(Plotter):
     name = 'Sensitivity analysis of runahead IFTs'
-    fname = 'baseline_sensitivity/ift_sensitivity_real'
+    fname = 'baseline_sensitivity/ift_sensitivity'
     description = 'Sensitivity analysis of NIPCs and pseudoretired insts relative to baseline with various LLL in-flight cycle thresholds'
 
     def __init__(self, m5out_pattern: str) -> None:
@@ -84,7 +84,7 @@ class IFTIPCReal(Plotter):
             hue='experiment',
             order=self.ipc_frame['benchmark']
         )
-        ipc_plot.bar_label(ipc_plot.containers[4], fontsize=6, rotation=90, fmt='%.4f')
+        ipc_plot.bar_label(ipc_plot.containers[5], fontsize=6, rotation=90, fmt='%.4f')
         ipc_plot.set_title('NIPC relative to stock CPU')
         for l in ipc_plot.get_xticklabels():
             l.set_rotation(90)

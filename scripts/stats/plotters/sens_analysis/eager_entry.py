@@ -26,7 +26,7 @@ class EagerEntry(Plotter):
             LOG.debug(f'\t reading no overlap stats')
             self.data[bench]['Eager entry'] = self.read_stats(bench, 'm5out-spec2017-traditional-re-eager-entry')
 
-    def construct_nipc_frame(self) -> None:
+    def construct_ipc_frame(self) -> None:
         frame = FrameConstructor.relative_frame(
             self.data,
             'system.processor.cores1.core.realIpc',
@@ -49,7 +49,7 @@ class EagerEntry(Plotter):
         self.pseudoretired_frame = frame
 
     def construct_frames(self) -> None:
-        self.construct_nipc_frame()
+        self.construct_ipc_frame()
         self.construct_retired_frame()
 
     def plot(self) -> None:

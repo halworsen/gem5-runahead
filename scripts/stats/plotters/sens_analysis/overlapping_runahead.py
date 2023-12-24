@@ -9,7 +9,7 @@ LOG = logging.getLogger(__name__)
 class OverlappingRE(Plotter):
     name = 'Sensitivity analysis of overlapping runahead'
     fname = 'baseline_sensitivity/overlapping_re_sensitivity'
-    description = 'Sensitivity analysis of NIPCs and pseudoretired insts relative to baseline with various LLL in-flight cycle thresholds'
+    description = 'Sensitivity analysis of IPCs and pseudoretired insts relative to baseline with various LLL in-flight cycle thresholds'
 
     def load_data(self) -> None:
         self.data = {}
@@ -26,7 +26,7 @@ class OverlappingRE(Plotter):
             LOG.debug(f'\t reading no overlap stats')
             self.data[bench]['No overlap'] = self.read_stats(bench, 'm5out-spec2017-traditional-re-no-overlap')
 
-    def construct_nipc_frame(self) -> None:
+    def construct_ipc_frame(self) -> None:
         frame = FrameConstructor.relative_frame(
             self.data,
             'system.processor.cores1.core.realIpc',
@@ -49,7 +49,7 @@ class OverlappingRE(Plotter):
         self.pseudoretired_frame = frame
 
     def construct_frames(self) -> None:
-        self.construct_nipc_frame()
+        self.construct_ipc_frame()
         self.construct_retired_frame()
 
     def plot(self) -> None:

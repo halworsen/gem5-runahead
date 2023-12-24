@@ -3,20 +3,19 @@ from pandas import DataFrame
 import seaborn as sbn
 import scipy
 
-class DynamicExitIPC(Plotter):
-    name = 'Dynamic exit model NIPC'
-    fname = 'dynamic_exit/nipc'
-    description = 'Dynamic exit model NIPCs'
+class NLLBIPC(Plotter):
+    name = 'NLLB model IPC'
+    fname = 'nllb/nllb_ipc'
+    description = 'NLLB model IPCs'
 
     def load_data(self) -> None:
         self.data = {}
         for bench in self.benchmarks():
             self.data[bench] = {}
-            print(bench)
+            self.data[bench]['O3'] = self.read_stats(bench, 'm5out-spec2017-o3-baseline')
             self.data[bench]['Runahead'] = self.read_stats(bench, 'm5out-spec2017-re-baseline')
             self.data[bench]['Minimum Work'] = self.read_stats(bench, 'm5out-spec2017-re-minwork')
             self.data[bench]['NLLB'] = self.read_stats(bench, 'm5out-spec2017-re-nllb')
-            self.data[bench]['Dynamic Exit'] = self.read_stats(bench, 'm5out-spec2017-re-dynamic-exit')
 
     def construct_frames(self) -> None:
         # just do adjusted IPC here as well
@@ -25,52 +24,47 @@ class DynamicExitIPC(Plotter):
             'variant': [],
             'insts': [],
             'cycles': [],
-            'realCycles': [],
-            'nipc': [],
+            'ipc': [],
         })
 
-        all_insts = {'Runahead': 0, 'Minimum Work': 0, 'NLLB': 0, 'Dynamic Exit': 0}
-        all_cycles = {'Runahead': 0, 'Minimum Work': 0, 'NLLB': 0, 'Dynamic Exit': 0}
-        all_real_cycles = {'Runahead': 0, 'Minimum Work': 0, 'NLLB': 0, 'Dynamic Exit': 0}
+        all_insts = {'O3': 0, 'Runahead': 0, 'Minimum Work': 0, 'NLLB': 0}
+        all_cycles = {'O3': 0, 'Runahead': 0, 'Minimum Work': 0, 'NLLB': 0}
         for bench in self.benchmarks():
-            for model in ['Runahead', 'Minimum Work', 'NLLB', 'Dynamic Exit']:
+            for model in ['O3', 'Runahead', 'Minimum Work', 'NLLB']:
                 insts, *_ = self.stat(f'{bench}.{model}.simInsts')
                 cycles, *_ = self.stat(f'{bench}.{model}.system.processor.cores1.core.numCycles')
-                real_cycles, *_ = self.stat(f'{bench}.{model}.system.processor.cores1.core.realCycles')
-                nipc, *_ = self.stat(f'{bench}.{model}.system.processor.cores1.core.realIpc')
+                ipc = insts / cycles
 
                 row = {
                     'benchmark': bench, 'variant': model,
-                    'insts': insts, 'cycles': cycles, 'realCycles': real_cycles,
-                    'nipc': nipc,
+                    'insts': insts, 'cycles': cycles,
+                    'ipc': ipc,
                 }
                 frame.loc[len(frame)] = row
 
                 all_insts[model] += insts
                 all_cycles[model] += cycles
-                all_real_cycles[model] += real_cycles
 
         frame.sort_values(by='benchmark', ascending=True, inplace=True)
 
         # IPC across all benchmarks
-        all_nipc = {
-            'Runahead': all_insts['Runahead'] / all_real_cycles['Runahead'],
-            'Minimum Work': all_insts['Minimum Work'] / all_real_cycles['Minimum Work'],
-            'NLLB': all_insts['NLLB'] / all_real_cycles['NLLB'],
-            'Dynamic Exit': all_insts['Dynamic Exit'] / all_real_cycles['Dynamic Exit'],
+        all_ipc = {
+            'O3': all_insts['O3'] / all_cycles['O3'],
+            'Runahead': all_insts['Runahead'] / all_cycles['Runahead'],
+            'Minimum Work': all_insts['Minimum Work'] / all_cycles['Minimum Work'],
+            'NLLB': all_insts['NLLB'] / all_cycles['NLLB'],
         }
-        for v in all_nipc.keys():
+        for v in all_ipc.keys():
             row = {
                 'benchmark': 'all',
                 'variant': v,
                 'insts': all_insts[v],
                 'cycles': all_cycles[v],
-                'realCycles': all_real_cycles[v],
-                'nipc': all_nipc[v],
+                'ipc': all_ipc[v],
             }
             frame.loc[len(frame)] = row
 
-        print(frame)
+        print(frame[(frame['variant'] == 'NLLB') | (frame['variant'] == 'Runahead')])
         self.frame = frame
 
     def plot(self) -> None:
@@ -78,7 +72,7 @@ class DynamicExitIPC(Plotter):
         plot = sbn.barplot(
             self.frame,
             x='benchmark',
-            y='nipc',
+            y='ipc',
             hue='variant'
         )
 

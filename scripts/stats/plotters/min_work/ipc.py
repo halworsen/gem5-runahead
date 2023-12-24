@@ -21,7 +21,6 @@ class MinimumWorkSensitivityIPC(Plotter):
         self.data = {}
         for bench in self.benchmarks():
             self.data[bench] = {}
-            self.data[bench]['stock'] = self.read_stats(bench, 'm5out-spec2017-o3-baseline')
             self.data[bench]['runahead'] = self.read_stats(bench, 'm5out-spec2017-re-baseline')
             self.data[bench]['minwork'] = {'deadline': {}, 'work': {}}
                 
@@ -48,36 +47,20 @@ class MinimumWorkSensitivityIPC(Plotter):
             'variant': [],
             'insts': [],
             'cycles': [],
+            'real_cycles': [],
             'ipc': [],
         })
 
-        all_insts = {'O3': 0, 'Minimum Work': 0, 'Runahead': 0}
-        all_cycles = {'O3': 0, 'Minimum Work': 0, 'Runahead': 0}
+        all_insts = {'Minimum Work': 0, 'Runahead': 0}
+        all_cycles = {'Minimum Work': 0, 'Runahead': 0}
+        all_real_cycles = {'Minimum Work': 0, 'Runahead': 0}
         for bench in self.benchmarks():
-            stock_insts, *_ = self.stat(f'{bench}.stock.simInsts')
-            stock_cycles, *_ = self.stat(f'{bench}.stock.system.processor.cores1.core.numCycles')
-            stock_ipc = stock_insts / stock_cycles
-            # stock_ipc, *_ = self.stat(f'{bench}.stock.system.processor.cores1.core.realIpc')
-
-            row = {
-                'benchmark': bench,
-                'experiment': 'O3',
-                'experiment_variable': 'O3',
-                'variant': 'O3',
-                'insts': stock_insts,
-                'cycles': stock_cycles,
-                'ipc': stock_ipc,
-            }
-            frame.loc[len(frame)] = row
-
-            all_insts['O3'] += stock_insts
-            all_cycles['O3'] += stock_cycles
-            
             re_insts, *_ = self.stat(f'{bench}.runahead.simInsts')
             re_cycles, *_ = self.stat(f'{bench}.runahead.system.processor.cores1.core.numCycles')
+            re_real_cyles, *_ = self.stat(f'{bench}.runahead.system.processor.cores1.core.realCycles')
 
-            ipc = re_insts / re_cycles
-            # ipc, *_ = self.stat(f'{bench}.runahead.system.processor.cores1.core.realIpc')
+            #ipc = re_insts / re_cycles
+            ipc, *_ = self.stat(f'{bench}.runahead.system.processor.cores1.core.realIpc')
 
             row = {
                 'benchmark': bench,
@@ -86,19 +69,22 @@ class MinimumWorkSensitivityIPC(Plotter):
                 'variant': 'Runahead',
                 'insts': re_insts,
                 'cycles': re_cycles,
+                'real_cycles': re_real_cyles,
                 'ipc': ipc,
             }
             frame.loc[len(frame)] = row
 
             all_insts['Runahead'] += re_insts
+            all_real_cycles['Runahead'] += re_real_cyles
             all_cycles['Runahead'] += re_cycles
 
             for variable, variable_data in self.data[bench]['minwork'].items():
                 for run in variable_data.keys():
                     min_work_insts, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.simInsts')
                     min_work_cycles, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.system.processor.cores1.core.numCycles')
-                    min_work_ipc = min_work_insts / min_work_cycles
-                    # min_work_ipc, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.system.processor.cores1.core.realIpc')
+                    min_work_real_cyles, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.system.processor.cores1.core.realCycles')
+                    #min_work_ipc = min_work_insts / min_work_cycles
+                    min_work_ipc, *_ = self.stat(f'{bench}.minwork.{variable}.{run}.system.processor.cores1.core.realIpc')
 
                     row = {
                         'benchmark': bench,
@@ -107,15 +93,13 @@ class MinimumWorkSensitivityIPC(Plotter):
                         'variant': f'Min Work - {variable}={run}',
                         'insts': min_work_insts,
                         'cycles': min_work_cycles,
+                        'real_cycles': min_work_real_cyles,
                         'ipc': min_work_ipc,
                     }
                     frame.loc[len(frame)] = row
 
         # IPC across all benchmarks
-        all_ipc = {
-            'O3': all_insts['O3'] / all_cycles['O3'],
-            'Runahead': all_insts['Runahead'] / all_cycles['Runahead'],
-        }
+        all_ipc = {'Runahead': all_insts['Runahead'] / all_real_cycles['Runahead']}
         for v in all_ipc.keys():
             row = {
                 'benchmark': 'all',
@@ -123,14 +107,14 @@ class MinimumWorkSensitivityIPC(Plotter):
                 'experiment_variable': 'all',
                 'variant': v,
                 'insts': all_insts[v],
-                'cycles': all_cycles[v],
+                'cycles': all_real_cycles[v],
                 'ipc': all_ipc[v],
             }
             frame.loc[len(frame)] = row
 
         # Compute aggregate stats for minimum work
         # Roundabout way of selecting minimum work rows only
-        selector = (frame['experiment'] != 'Runahead') & (frame['experiment'] != 'O3')
+        selector = (frame['experiment'] != 'Runahead')
         min_work_frame = frame[selector]
         # Start with deadline and work runs
         for variable in min_work_frame['experiment_variable'].unique():
@@ -141,7 +125,8 @@ class MinimumWorkSensitivityIPC(Plotter):
                 run_frame = variable_frame[variable_frame['experiment'] == run]
                 total_insts = run_frame['insts'].sum()
                 total_cycles = run_frame['cycles'].sum()
-                total_ipc = total_insts / total_cycles
+                total_real_cycles = run_frame['real_cycles'].sum()
+                total_nipc = total_insts / total_real_cycles
 
                 row = {
                     'benchmark': 'all',
@@ -150,7 +135,8 @@ class MinimumWorkSensitivityIPC(Plotter):
                     'variant': f'Min Work - {variable}={run}',
                     'insts': total_insts,
                     'cycles': total_cycles,
-                    'ipc': total_ipc,
+                    'real_cycles': total_real_cycles,
+                    'ipc': total_nipc,
                 }
 
                 frame.loc[len(frame)] = row

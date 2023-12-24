@@ -1,6 +1,6 @@
 from plotters.simpoint_weights import SimPointWeights
 
-from plotters.sens_analysis.ift_ipc import IFTIPCReal
+from plotters.sens_analysis.ift_ipc import IFTIPC
 from plotters.sens_analysis.overlapping_runahead import OverlappingRE
 from plotters.sens_analysis.eager_entry import EagerEntry
 from plotters.sens_analysis.filtered_runahead import FilteredRE
@@ -16,7 +16,15 @@ from plotters.min_work.interim_periods import MinWorkInterimPeriods
 from plotters.min_work.runahead_time import MinWorkRunaheadTime, MinWorkRunaheadFraction, MinWorkRunaheadCycleFraction, MinWorkRunaheadPeriods
 from plotters.min_work.l2u import MinWorkL2U
 
+from plotters.nllb.interim_periods import NLLBInterimPeriods
+from plotters.nllb.ipc import NLLBIPC
+from plotters.nllb.l2u import NLLBL2U
+
+from plotters.dynamic_exit.interim_periods import DynExInterimPeriods
 from plotters.dynamic_exit.ipc import DynamicExitIPC
+from plotters.dynamic_exit.l2u import DynExL2U
+
+from plotters.troubleshooting.rob_full_pct import ROBFullPct
 
 from argparse import ArgumentParser
 from os import makedirs
@@ -30,7 +38,7 @@ ALL_PLOTS = [
     # SimPointWeights(),
 
     # Sensitivity analysis
-    # IFTIPCReal(r'^m5out\-spec2017\-traditional\-re\-ift\-(\d+)$'),
+    # IFTIPC(r'^m5out\-spec2017\-traditional\-re\-ift\-(\d+)$'),
     # OverlappingRE(),
     # EagerEntry(),
     # FilteredRE(),
@@ -58,8 +66,26 @@ ALL_PLOTS = [
     # MinWorkRunaheadPeriods(),
     # MinWorkL2U(),
 
+    # No Load Left Behind (NLLB) model
+    # NLLBIPC(),
+    # NLLBInterimPeriods(),
+    # NLLBRunaheadTime(),
+    # NLLBRunaheadFraction(),
+    # NLLBRunaheadCycleFraction(),
+    # NLLBRunaheadPeriods(),
+    # NLLBL2U(),
+
     # Dynamic exit model
     DynamicExitIPC(),
+    # DynExInterimPeriods(),
+    # DynExRunaheadTime(),
+    # DynExRunaheadFraction(),
+    # DynExRunaheadCycleFraction(),
+    # DynExRunaheadPeriods(),
+    # DynExL2U(),
+
+    # Debug/Troubleshooting
+    # ROBFullPct(),
 ]
 
 logging.basicConfig(

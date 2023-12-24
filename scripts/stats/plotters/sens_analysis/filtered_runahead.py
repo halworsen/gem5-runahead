@@ -26,10 +26,10 @@ class FilteredRE(Plotter):
             LOG.debug(f'\t reading not filtered stats')
             self.data[bench]['Not filtered'] = self.read_stats(bench, 'm5out-spec2017-traditional-re-not-filtered')
 
-    def construct_nipc_frame(self) -> None:
+    def construct_ipc_frame(self) -> None:
         frame = FrameConstructor.relative_frame(
             self.data,
-            'system.processor.cores1.core.ipc',
+            'system.processor.cores1.core.realIpc',
             relative_to='baseline'
         )
         frame.sort_values(by='benchmark', ascending=True, inplace=True)
@@ -49,7 +49,7 @@ class FilteredRE(Plotter):
         self.pseudoretired_frame = frame
 
     def construct_frames(self) -> None:
-        self.construct_nipc_frame()
+        self.construct_ipc_frame()
         self.construct_retired_frame()
 
     def plot(self) -> None:
@@ -67,11 +67,11 @@ class FilteredRE(Plotter):
         )
         ipc_plot.bar_label(ipc_plot.containers[0], fontsize=8, rotation=90, fmt='%.4f')
         ipc_plot.bar_label(ipc_plot.containers[1], fontsize=8, rotation=90, fmt='%.4f')
-        ipc_plot.set_title('IPC relative to stock CPU')
+        ipc_plot.set_title('NIPC relative to stock CPU')
         for l in ipc_plot.get_xticklabels():
             l.set_rotation(90)
         ipc_plot.set_xlabel('')
-        ipc_plot.set_ylabel('Relative IPC')
+        ipc_plot.set_ylabel('Relative NIPC')
         ipc_plot.set_ylim(0.9)
 
         _ = fig.add_subplot(gs[0, 1])
