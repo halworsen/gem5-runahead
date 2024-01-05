@@ -107,7 +107,7 @@ void multiplyMatricesRandom(Matrix *a, Matrix *b, Matrix *out, unsigned int seed
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3 ) {
+    if (argc != 3) {
         printf("Usage: matmul MATRIX_SIZE RANDOM\n");
         return 1;
     }
