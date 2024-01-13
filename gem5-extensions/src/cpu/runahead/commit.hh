@@ -610,6 +610,8 @@ class Commit
         statistics::Scalar loadsAtROBHead;
         /** Amount of cycles with long-latency loads at the head of the ROB during commit */
         statistics::Scalar lllAtROBHead;
+        /** Amount of normal cycles with long-latency loads at the head of the ROB during commit */
+        statistics::Scalar normalLLLAtROBHead;
         /** Total number of instructions committed during runahead per thread */
         statistics::Vector instsPseudoretired;
         /** The amount of loads pseudoretired in the current runahead period */

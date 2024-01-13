@@ -214,6 +214,8 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
                "Amount of cycles with loads at the head of the ROB during commit"),
       ADD_STAT(lllAtROBHead, statistics::units::Cycle::get(),
                "Total amount of cycles with LLLs at the ROB head"),
+      ADD_STAT(normalLLLAtROBHead, statistics::units::Cycle::get(),
+               "Total amount of normal cycles with LLLs at the ROB head"),
       ADD_STAT(instsPseudoretired, statistics::units::Count::get(),
                "Number of instructions committed in runahead"),
       ADD_STAT(loadsPseudoretired, statistics::units::Count::get(),
@@ -309,6 +311,7 @@ Commit::CommitStats::CommitStats(CPU *cpu, Commit *commit)
 
     loadsAtROBHead.prereq(loadsAtROBHead);
     lllAtROBHead.prereq(lllAtROBHead);
+    normalLLLAtROBHead.prereq(normalLLLAtROBHead);
     instsPseudoretired
         .init(cpu->numThreads)
         .flags(total);
@@ -707,6 +710,7 @@ Commit::dynamicDelayedRunaheadExit(ThreadID tid)
     if (instsPseudoretired[tid] < runaheadInfo.trackedROBInsts) {
         DPRINTF(RunaheadCommit, "[tid:%i] Runahead did not clear the ROB, exiting ASAP.\n");
         exitRunahead[tid] = true;
+        stats.runaheadExitCause[stats.REExitCause::EagerExit]++;
         return;
     }
 
@@ -1327,9 +1331,11 @@ Commit::commitInsts()
                 }
             }
 
-            // If all packets missed in cache, enter runahead
+            // If all packets missed in cache, try to enter runahead
             if (allPktsMissed) {
                 ++stats.lllAtROBHead;
+                if (!cpu->inRunahead(tid))
+                    ++stats.normalLLLAtROBHead;
 
                 // If not already in runahead, try to enter it
                 // If in runahead, make sure the load isn't already poisoned (waiting to drain)
