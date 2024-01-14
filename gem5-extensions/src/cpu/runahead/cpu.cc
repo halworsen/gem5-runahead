@@ -2070,7 +2070,7 @@ CPU::wakeCPU()
         baseStats.numCycles += cycles;
 
         if (rob.numFreeEntries(0) == 0)
-            cpuStats.numROBFullCycles++;
+            cpuStats.numROBFullCycles += cycles;
 
         if (inRunahead(0)) {
             cpuStats.runaheadCycles += cycles;
